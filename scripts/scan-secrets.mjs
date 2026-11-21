@@ -105,7 +105,7 @@ const report = {
   scan: 'secrets',
   at_utc: new Date().toISOString(),
   git_sha: (() => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root }).toString().trim(); } catch { return null; } })(),
-  git_dirty: (() => { try { return execFileSync('git', ['status', '--porcelain'], { cwd: root }).toString().trim().length > 0; } catch { return null; } })(),
+  git_dirty: (() => { try { return execFileSync('git', ['status', '--porcelain', '--', '.', ':!evidence'], { cwd: root }).toString().trim().length > 0; } catch { return null; } })(),
   files_scanned: scanned,
   files_scanned_by_scope: scope,
   web_dist_present: scope['web-dist'] > 0,

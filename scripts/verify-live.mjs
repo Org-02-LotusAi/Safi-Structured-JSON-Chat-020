@@ -193,7 +193,7 @@ const report = {
   started_at_utc: new Date().toISOString(),
   target_url: base.origin,
   git_sha: (() => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root }).toString().trim(); } catch { return null; } })(),
-  git_dirty: (() => { try { return execFileSync('git', ['status', '--porcelain'], { cwd: root }).toString().trim().length > 0; } catch { return null; } })(),
+  git_dirty: (() => { try { return execFileSync('git', ['status', '--porcelain', '--', '.', ':!evidence'], { cwd: root }).toString().trim().length > 0; } catch { return null; } })(),
   versions: { node: process.version, npm: /npm\/([^ ]+)/.exec(process.env.npm_config_user_agent || '')?.[1] ?? null, nats_server: null },
   status_before: { model: status0.model, upstream: status0.upstream, openai_base_url_host: status0.openai_base_url_host, api_calls_used: status0.api_calls_used, api_call_cap: status0.api_call_cap },
   openai_request_ids: [],

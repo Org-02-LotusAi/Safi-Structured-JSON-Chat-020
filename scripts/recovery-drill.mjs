@@ -198,7 +198,7 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const gitSha = (() => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root }).toString().trim(); } catch { return null; } })();
-  const gitDirty = (() => { try { return execFileSync('git', ['status', '--porcelain'], { cwd: root }).toString().trim().length > 0; } catch { return null; } })();
+  const gitDirty = (() => { try { return execFileSync('git', ['status', '--porcelain', '--', '.', ':!evidence'], { cwd: root }).toString().trim().length > 0; } catch { return null; } })();
   const report = { drill: 'recovery', at_utc: new Date().toISOString(), git_sha: gitSha, git_dirty: gitDirty, target: baseUrl.origin, overall: passed ? 'PASS' : 'FAIL', stream_before: before, stream_final: final, checks };
   const file = path.join(outDir, `drill-${stamp}.json`);
   fs.writeFileSync(file, JSON.stringify(report, null, 2) + '\n');
