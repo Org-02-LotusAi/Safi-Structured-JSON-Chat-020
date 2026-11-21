@@ -123,7 +123,7 @@
         "tests/e2e/chat.spec.ts ('worker stopped gives an offline error; restart recovers', real worker process kill/start; no upstream call while down)",
         "evidence/e2e/05-worker-offline.png",
         "evidence/e2e/06-worker-recovered.png",
-        "evidence/recovery/DRILL_REPORT (docker compose stack: worker stop -> 504 worker_unavailable (NATS no responders); start -> 200)",
+        "evidence/recovery/drill-2026-11-21T13-10-47-639Z.json (docker compose stack: worker stop -> 504 worker_unavailable (NATS no responders); start -> 200)",
         "evidence/recovery/drill-console.txt",
         "tests/server.integration.test.ts"
       ],
@@ -143,13 +143,13 @@
       "title": "JetStream durable redacted receipts replay after restart; no secret in Git, browser JS, logs or NATS audit",
       "status": "PASS",
       "evidence": [
-        "evidence/recovery/DRILL_REPORT (receipt count preserved across docker compose nats restart; new receipts after recovery)",
+        "evidence/recovery/drill-2026-11-21T13-10-47-639Z.json (receipt count preserved across docker compose nats restart; new receipts after recovery)",
         "tests/server.integration.test.ts (receipts in real JetStream; receipts contain no prompt/reply text)",
         "tests/server.chat.test.ts ('publishes a redacted audit receipt before responding'; M6 worker error messages redacted before reaching the browser)",
         "tests/server.logs.test.ts (server logs captured at debug level across wrong/right login, ok chat, worker error carrying a key, NATS timeout, no-responders, invalid reply, ingress rejection: no password, session cookie, CSRF token, prompt text, reply text or API key appears)",
         "tests/worker.handler.test.ts ('logs ids and outcome but never prompt text...' and 'logs nothing sensitive when the upstream fails ...': worker logs captured, no key/prompt/history/reply)",
         "tests/schemas.test.ts (secret redaction)",
-        "evidence/security/SCAN_REPORT (npm run scan:secrets: tracked files, web/dist and evidence/ scanned for key/token patterns and the literal .env secrets; 0 hits)",
+        "evidence/security/secret-scan-2026-11-21T13-11-04-338Z.json (npm run scan:secrets: tracked files, web/dist and evidence/ scanned for key/token patterns and the literal .env secrets; 0 hits)",
         "evidence/live-selftest/report.json (receipt redaction check, SELFTEST_ONLY)"
       ],
       "note": "Log-secret claims rest on the automated log-capture tests above (server and worker) and the committed secret-scan, not on inspection. Real-OpenAI logs have not been observed (no key on the build machine); the worker never logs prompt or reply text by construction and by test."

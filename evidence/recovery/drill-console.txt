@@ -2,17 +2,17 @@
 > safi-chat-020@0.1.0 drill:recovery
 > node scripts/recovery-drill.mjs
 
-[drill 2026-11-21T13:09:03.957Z] target https://localhost:8443; tls verification OFF (localhost dev cert)
-[drill 2026-11-21T13:09:13.101Z] PASS baseline chat ok - status 200
-[drill 2026-11-21T13:09:13.101Z] PASS baseline audit persisted - persisted
-[drill 2026-11-21T13:09:13.537Z] PASS receipts present before drill - messages=25
-[drill 2026-11-21T13:09:14.401Z] worker stopped
-[drill 2026-11-21T13:09:14.423Z] PASS worker down -> worker_unavailable (no false success) - status 504 code worker_unavailable
-[drill 2026-11-21T13:09:15.348Z] worker started
-[drill 2026-11-21T13:09:18.539Z] PASS after worker restart a new request succeeds - status 200
-[drill 2026-11-21T13:09:19.988Z] nats restarted
-[drill 2026-11-21T13:09:20.011Z] PASS receipts persisted across nats restart - before=28 after=28
-[drill 2026-11-21T13:09:28.100Z] chat after nats restart: status 200 code ok (49 ms since restart)
-[drill 2026-11-21T13:09:28.100Z] PASS chat works after nats restart (reconnect) - audit persisted
-[drill 2026-11-21T13:09:28.120Z] PASS new receipts published after recovery - after=28 final=29
-[drill 2026-11-21T13:09:28.302Z] overall PASS; report evidence\recovery\drill-2026-11-21T13-09-28-121Z.json
+[drill 2026-11-21T13:10:23.588Z] target https://localhost:8443; tls verification OFF (localhost dev cert)
+[drill 2026-11-21T13:10:32.672Z] PASS baseline chat ok - status 200
+[drill 2026-11-21T13:10:32.672Z] PASS baseline audit persisted - persisted
+[drill 2026-11-21T13:10:33.020Z] PASS receipts present before drill - messages=31
+[drill 2026-11-21T13:10:33.872Z] worker stopped
+[drill 2026-11-21T13:10:33.891Z] PASS worker down -> worker_unavailable (no false success) - status 504 code worker_unavailable
+[drill 2026-11-21T13:10:34.849Z] worker started
+[drill 2026-11-21T13:10:38.042Z] PASS after worker restart a new request succeeds - status 200
+[drill 2026-11-21T13:10:39.531Z] nats restarted
+[drill 2026-11-21T13:10:39.552Z] PASS receipts persisted across nats restart - before=34 after=34
+[drill 2026-11-21T13:10:47.620Z] chat after nats restart: status 200 code ok (39 ms since restart)
+[drill 2026-11-21T13:10:47.620Z] PASS chat works after nats restart (reconnect) - audit persisted
+[drill 2026-11-21T13:10:47.638Z] PASS new receipts published after recovery - after=34 final=35
+[drill 2026-11-21T13:10:47.783Z] overall PASS; report evidence\recovery\drill-2026-11-21T13-10-47-639Z.json

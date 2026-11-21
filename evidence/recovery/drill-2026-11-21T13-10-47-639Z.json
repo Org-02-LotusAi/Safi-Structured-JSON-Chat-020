@@ -1,0 +1,62 @@
+{
+  "drill": "recovery",
+  "at_utc": "2026-11-21T13:10:47.781Z",
+  "git_sha": "e0a8c711cd55d390da2ed535a6e9988ffb5b6599",
+  "git_dirty": false,
+  "target": "https://localhost:8443",
+  "overall": "PASS",
+  "stream_before": {
+    "messages": 31,
+    "last_seq": 31,
+    "max_age_ns": 604800000000000,
+    "max_bytes": 67108864
+  },
+  "stream_final": {
+    "messages": 35,
+    "last_seq": 35,
+    "max_age_ns": 604800000000000,
+    "max_bytes": 67108864
+  },
+  "checks": [
+    {
+      "name": "baseline chat ok",
+      "result": "PASS",
+      "detail": "status 200"
+    },
+    {
+      "name": "baseline audit persisted",
+      "result": "PASS",
+      "detail": "persisted"
+    },
+    {
+      "name": "receipts present before drill",
+      "result": "PASS",
+      "detail": "messages=31"
+    },
+    {
+      "name": "worker down -> worker_unavailable (no false success)",
+      "result": "PASS",
+      "detail": "status 504 code worker_unavailable"
+    },
+    {
+      "name": "after worker restart a new request succeeds",
+      "result": "PASS",
+      "detail": "status 200"
+    },
+    {
+      "name": "receipts persisted across nats restart",
+      "result": "PASS",
+      "detail": "before=34 after=34"
+    },
+    {
+      "name": "chat works after nats restart (reconnect)",
+      "result": "PASS",
+      "detail": "audit persisted"
+    },
+    {
+      "name": "new receipts published after recovery",
+      "result": "PASS",
+      "detail": "after=34 final=35"
+    }
+  ]
+}
