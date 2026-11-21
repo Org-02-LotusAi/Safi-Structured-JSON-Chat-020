@@ -1,0 +1,9 @@
+verify:live was run on the build machine (no OPENAI_API_KEY, no gpt-6-luna access).
+Against a local stack backed by a FAKE upstream, exposed through a throwaway cloudflared tunnel (valid TLS), it refuses:
+
+BLOCKED: the stack reports upstream "custom" (OPENAI_BASE_URL host 127.0.0.1:18081); A02-A05 require the worker to call the REAL OpenAI API with a real OPENAI_API_KEY. This is expected on a machine without OpenAI access.
+Nothing was verified. Fix the precondition and re-run; BLOCKED is not PASS.
+exit 2
+
+Other refusals observed: http:// URL -> exit 2; unreachable/untrusted-TLS target -> exit 2.
+No live acceptance run has happened. This file is NOT acceptance evidence.

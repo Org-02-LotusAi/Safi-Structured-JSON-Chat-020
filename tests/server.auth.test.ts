@@ -128,5 +128,13 @@ describe('auth and sessions', () => {
     const l = await login(h.app);
     const res = await h.app.inject({ method: 'GET', url: '/api/status', headers: { cookie: l.cookie } });
     expect(res.json()).toMatchObject({ api_calls_used: 0, api_call_cap: 40, user_rate_per_min: 10, model: 'test-model', nats: 'connected', worker: { state: 'unknown' } });
+    expect(res.json()).toMatchObject({ upstream: 'openai', openai_base_url_host: 'api.openai.com' });
+  });
+
+  it('reports a custom upstream when OPENAI_BASE_URL points elsewhere', async () => {
+    const h = await makeHarness({ config: { openaiBaseUrlHost: '127.0.0.1:9999' } });
+    const l = await login(h.app);
+    const res = await h.app.inject({ method: 'GET', url: '/api/status', headers: { cookie: l.cookie } });
+    expect(res.json()).toMatchObject({ upstream: 'custom', openai_base_url_host: '127.0.0.1:9999' });
   });
 });

@@ -1,0 +1,162 @@
+{
+  "product": "SAFI Chat 020",
+  "sow": "docs/SOW-020.md",
+  "status_vocabulary": ["PASS", "FAIL", "BLOCKED", "PENDING_HUMAN"],
+  "rules": "PASS only where committed automated evidence proves it. SAFI alone issues formal acceptance. Missing evidence is not PASS.",
+  "build_machine_limits": {
+    "openai": "No OPENAI_API_KEY and no gpt-6-luna access on the build machine; every real-OpenAI check is BLOCKED, not simulated.",
+    "https": "No owned domain/VM. npm run share:tunnel (Cloudflare quick tunnel) was verified to give a valid-TLS URL to a local stack; no permanent URL is recorded.",
+    "human": "No independent non-developer session has taken place."
+  },
+  "checks": {
+    "A01": {
+      "title": "Non-developer uses real HTTPS URL and assistant-ui",
+      "status": "PENDING_HUMAN",
+      "reason": "Requires an independent tester at a real HTTPS URL; see DOGFOOD.md. A temporary valid-TLS URL can be produced with npm run share:tunnel (or a domain via the caddy profile).",
+      "supporting_evidence": [
+        "evidence/e2e/01-three-turn-summary.png",
+        "evidence/ui/",
+        "scripts/share-tunnel.mjs (verified: public URL printed, /healthz returned {\"ok\":true} through it with a valid certificate; URL not recorded)"
+      ]
+    },
+    "A02": {
+      "title": "Three-turn real conversation with OpenAI request IDs; later turn uses prior context",
+      "status": "BLOCKED",
+      "reason": "Needs REAL OpenAI: no OPENAI_API_KEY / gpt-6-luna access on the build machine. Run npm run verify:live against a deployed stack.",
+      "supporting_evidence": [
+        "tests/e2e/chat.spec.ts (fake upstream, test only: request 3 carries both earlier turns)",
+        "tests/server.chat.test.ts (history bounded and per conversation)",
+        "scripts/verify-live.mjs",
+        "evidence/live/BLOCKED-2026-11-21.txt (script refuses a fake upstream)"
+      ]
+    },
+    "A03": {
+      "title": "Real NATS request and reply captured with valid SAFI JSON, GUIDs, context, correlation",
+      "status": "BLOCKED",
+      "reason": "Grouped with A02-A05, which must involve a real OpenAI call. The capture logic ran only against a fake upstream (self-test).",
+      "supporting_evidence": [
+        "tests/server.integration.test.ts (real nats-server, real JetStream)",
+        "tests/worker.nats.test.ts",
+        "evidence/live-selftest/report.json (SELFTEST_ONLY, fake upstream: A03 capture check PASS)"
+      ]
+    },
+    "A04": {
+      "title": "Summary schema: live strict Structured Output, Ajv-validated, UI shows ID/version/digest",
+      "status": "BLOCKED",
+      "reason": "Needs REAL OpenAI (strict structured output from gpt-6-luna).",
+      "supporting_evidence": [
+        "tests/worker.handler.test.ts (strict json_schema request, Ajv result check, fake upstream)",
+        "tests/e2e/chat.spec.ts",
+        "evidence/e2e/01-three-turn-summary.png",
+        "evidence/ui/04-summary-ok.png"
+      ]
+    },
+    "A05": {
+      "title": "Tasks schema yields typed tasks with the same UI/backend",
+      "status": "BLOCKED",
+      "reason": "Needs REAL OpenAI.",
+      "supporting_evidence": [
+        "tests/e2e/chat.spec.ts (schema switch, no code edits)",
+        "evidence/e2e/02-tasks.png",
+        "evidence/ui/05-tasks-ok.png",
+        "tests/schemas.test.ts"
+      ]
+    },
+    "A06": {
+      "title": "Invalid body / unknown envelope fields rejected before NATS and OpenAI; counter unchanged",
+      "status": "PASS",
+      "evidence": [
+        "tests/server.chat.test.ts (describe 'POST /api/chat ingress (A06/A07/A08)')",
+        "tests/schemas.test.ts",
+        "evidence/live-selftest/report.json (probe checks with api_calls_used unchanged; SELFTEST_ONLY)"
+      ]
+    },
+    "A07": {
+      "title": "Unknown schema ID, mismatched hash, browser-supplied raw schema rejected before any OpenAI call",
+      "status": "PASS",
+      "evidence": [
+        "tests/server.chat.test.ts ('rejects unknown schema ids, mismatched digests and raw schemas with no NATS call')",
+        "tests/schemas.test.ts (registry tamper and keyword allowlist)"
+      ]
+    },
+    "A08": {
+      "title": "Forged from/to/Context/role, session change, cross-conversation substitution denied; browser cannot set NATS subject",
+      "status": "PASS",
+      "evidence": [
+        "tests/server.chat.test.ts (ingress rejects forged fields; foreign conversation 403; 'reply verification (A08/A09)')",
+        "tests/server.auth.test.ts (second login revokes first session, CSRF, tampered cookie)"
+      ]
+    },
+    "A09": {
+      "title": "Malformed / extra-field model reply fails Ajv and is visibly REJECTED",
+      "status": "PASS",
+      "evidence": [
+        "tests/worker.handler.test.ts (extra-field and wrong-type outputs map to invalid_model_output)",
+        "tests/server.chat.test.ts ('reply verification (A08/A09)')",
+        "tests/e2e/chat.spec.ts ('a malformed model reply is visibly REJECTED')",
+        "evidence/e2e/03-rejected.png",
+        "evidence/ui/07-error-rejected.png"
+      ]
+    },
+    "A10": {
+      "title": "Refusal, incomplete, 429 and timeout give distinct typed errors; no fake success",
+      "status": "PASS",
+      "evidence": [
+        "tests/worker.handler.test.ts (refusal, incomplete, HTTP 429 without auto-retry, timeout, network; deterministic injected upstream)",
+        "tests/server.chat.test.ts ('typed worker errors (A10)')",
+        "tests/e2e/chat.spec.ts (refusal)",
+        "evidence/e2e/04-refusal.png"
+      ],
+      "note": "Deterministic injected errors are permitted for negative paths by SOW section 10."
+    },
+    "A11": {
+      "title": "Worker unavailable: clear timeout, no false success; after restart a new request succeeds",
+      "status": "PASS",
+      "evidence": [
+        "tests/e2e/chat.spec.ts ('worker stopped gives an offline error; restart recovers', real worker process kill/start)",
+        "evidence/e2e/05-worker-offline.png",
+        "evidence/e2e/06-worker-recovered.png",
+        "evidence/recovery/drill-2026-11-21T12-31-49-342Z.json (docker compose stack: worker stop -> 504 worker_unavailable; start -> 200)",
+        "evidence/recovery/drill-console.txt",
+        "tests/server.integration.test.ts"
+      ],
+      "caveat": "The recovery request in the build-machine evidence was answered by a fake upstream. Repeat npm run drill:recovery (and verify:live) against the real-OpenAI deployment to show a real post-restart response."
+    },
+    "A12": {
+      "title": "Duplicate request does not cause a second OpenAI call; ambiguous completion reported, not retried",
+      "status": "PASS",
+      "evidence": [
+        "tests/worker.handler.test.ts (sequential and concurrent duplicate message_id -> one upstream call)",
+        "tests/server.chat.test.ts ('idempotency and ambiguity (A11/A12)': cached duplicate, duplicate_in_flight, upstream_ambiguous)"
+      ],
+      "caveat": "Upstream call counts were measured against a fake upstream; verify:live repeats the duplicate check against the live API."
+    },
+    "A13": {
+      "title": "JetStream durable redacted receipts replay after restart; no secret in Git, browser JS, logs or NATS audit",
+      "status": "PASS",
+      "evidence": [
+        "evidence/recovery/drill-2026-11-21T12-31-49-342Z.json (receipt count preserved across docker compose nats restart; new receipts after recovery)",
+        "tests/server.integration.test.ts (receipts in real JetStream)",
+        "tests/server.chat.test.ts ('publishes a redacted audit receipt before responding')",
+        "tests/schemas.test.ts (secret redaction)",
+        "evidence/live-selftest/report.json (receipt redaction check, SELFTEST_ONLY)"
+      ],
+      "note": "At commit time git grep for sk- style keys and a scan of web/dist found none. Logs: pino redaction configured; prompt/reply text is never logged."
+    },
+    "A14": {
+      "title": "Rate/call caps enforced; independent tester completes 30+ minutes; SHA, URL, screenshots, tests, handoff recorded",
+      "status": "PENDING_HUMAN",
+      "reason": "The human 30-minute session has not happened (DOGFOOD.md is a blank form).",
+      "supporting_evidence": [
+        "tests/server.chat.test.ts ('limits': 11th request 429 before NATS, cap persists across restart)",
+        "README.md, DOGFOOD.md, evidence/MANIFEST.md"
+      ]
+    }
+  },
+  "summary": {
+    "PASS": ["A06", "A07", "A08", "A09", "A10", "A11", "A12", "A13"],
+    "BLOCKED": ["A02", "A03", "A04", "A05"],
+    "PENDING_HUMAN": ["A01", "A14"],
+    "FAIL": []
+  }
+}

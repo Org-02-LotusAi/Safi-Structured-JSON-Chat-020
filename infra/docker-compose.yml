@@ -1,9 +1,23 @@
-# Run from the repo root:  docker compose -f infra/docker-compose.yml up -d --build
+# Run from the repo root (the --env-file flag is needed so ${...} below, e.g. NATS_USER, is read
+# from the repo-root .env rather than infra/.env):
+#   docker compose --env-file .env -f infra/docker-compose.yml up -d --build
 # NATS publishes no host port; worker and server reach it on the internal network.
+name: safi-chat-020
 services:
   nats:
     image: nats:2.11-alpine
-    command: ["-js", "-sd", "/data", "-c", "/etc/nats/nats.conf"]
+    # Only NATS_USER / NATS_PASS reach this container (not the rest of .env). If NATS_USER is set,
+    # authentication is enabled; the worker and server pick the same values up from .env.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -n "$$NATS_USER" ]; then
+          exec nats-server -js -c /etc/nats/nats.conf --user "$$NATS_USER" --pass "$$NATS_PASS"
+        fi
+        exec nats-server -js -c /etc/nats/nats.conf
+    environment:
+      NATS_USER: ${NATS_USER:-}
+      NATS_PASS: ${NATS_PASS:-}
     volumes:
       - ./nats.conf:/etc/nats/nats.conf:ro
       - nats-data:/data
@@ -16,8 +30,15 @@ services:
       dockerfile: Dockerfile
     command: ["node", "worker/dist/main.js"]
     env_file: ../.env
+    # env_file loads all of .env; blank what the worker never needs (login + session secrets).
+    # Reaching a fake/local OpenAI from here: OPENAI_BASE_URL=http://host.docker.internal:<port>/v1
     environment:
       NATS_URL: nats://nats:4222
+      PILOT_USERNAME: ""
+      PILOT_PASSWORD: ""
+      SESSION_SECRET: ""
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on: [nats]
     networks: [internal]
     restart: unless-stopped

@@ -1,0 +1,350 @@
+{
+  "tool": "verify-live",
+  "mode": "SELFTEST_FAKE_UPSTREAM",
+  "started_at_utc": "2026-11-21T12:36:30.003Z",
+  "target_url": "https://127.0.0.1:18443",
+  "git_sha": "1131e13459961d0e64cdbfd688931d91c681e907",
+  "versions": {
+    "node": "v24.13.0",
+    "npm": "11.19.0",
+    "nats_server": "2.11.17"
+  },
+  "status_before": {
+    "model": "gpt-6-luna",
+    "upstream": "custom",
+    "openai_base_url_host": "127.0.0.1:18081",
+    "api_calls_used": 9,
+    "api_call_cap": 40
+  },
+  "openai_request_ids": [
+    "req_fake_1",
+    "req_fake_2",
+    "req_fake_3",
+    "req_fake_4",
+    "req_fake_5"
+  ],
+  "stream": {
+    "name": "SAFI_CHAT_AUDIT",
+    "subjects": [
+      "safi.chat.audit.v1"
+    ],
+    "storage": "file",
+    "max_age_ns": 604800000000000,
+    "max_bytes": 67108864,
+    "messages": 14,
+    "first_seq": 1,
+    "last_seq": 14
+  },
+  "nats_capture_note": null,
+  "nats_capture": {
+    "request": {
+      "protocol": "safi.chat",
+      "version": "0.1.0",
+      "kind": "chat.request",
+      "message_id": "1ae48579-4025-41b1-927e-60854c2d5275",
+      "conversation_id": "392ec8ee-8cc7-472c-a03a-760cd77a6a25",
+      "in_reply_to": null,
+      "from_guid": "5afe0020000000000000000000000001",
+      "to_guid": "5afe0020000000000000000000000002",
+      "context": {
+        "thread_guid": "5afe0020000000000000000000000003",
+        "subject_guid": "5afe0020000000000000000000000004",
+        "path": [
+          "5afe0020000000000000000000000003",
+          "5afe0020000000000000000000000004"
+        ]
+      },
+      "schema_ref": {
+        "id": "safi.reply.summary",
+        "version": "1.0.0"
+      },
+      "schema_sha256": "07ce6d2102658e437f111ad1944afa305394a8a98b85379da955ec1bcf1ae1af",
+      "sent_at_utc": "2026-11-21T12:36:30.827Z",
+      "body": {
+        "text": "Using what I told you earlier, what is my favourite colour? Answer in one sentence.",
+        "history": [
+          {
+            "role": "user",
+            "text": "My favourite colour is teal. Please remember that."
+          },
+          {
+            "role": "assistant",
+            "text": "fake summary reply 1"
+          },
+          {
+            "role": "user",
+            "text": "I also like the number 7."
+          },
+          {
+            "role": "assistant",
+            "text": "fake summary reply 2"
+          }
+        ]
+      }
+    },
+    "reply": {
+      "protocol": "safi.chat",
+      "version": "0.1.0",
+      "message_id": "f299e1d7-d1ed-4020-8571-517e6e7d7260",
+      "conversation_id": "392ec8ee-8cc7-472c-a03a-760cd77a6a25",
+      "in_reply_to": "1ae48579-4025-41b1-927e-60854c2d5275",
+      "from_guid": "5afe0020000000000000000000000002",
+      "to_guid": "5afe0020000000000000000000000001",
+      "context": {
+        "thread_guid": "5afe0020000000000000000000000003",
+        "subject_guid": "5afe0020000000000000000000000004",
+        "path": [
+          "5afe0020000000000000000000000003",
+          "5afe0020000000000000000000000004"
+        ]
+      },
+      "schema_ref": {
+        "id": "safi.reply.summary",
+        "version": "1.0.0"
+      },
+      "schema_sha256": "07ce6d2102658e437f111ad1944afa305394a8a98b85379da955ec1bcf1ae1af",
+      "sent_at_utc": "2026-11-21T12:36:30.837Z",
+      "kind": "chat.result",
+      "status": "ok",
+      "body": {
+        "reply": "fake summary reply 3",
+        "tone": "neutral",
+        "followup_needed": false
+      },
+      "model": "fake-model-1",
+      "openai_request_id": "req_fake_3",
+      "usage": {
+        "input_tokens": 11,
+        "output_tokens": 7
+      }
+    }
+  },
+  "receipts_sample": [
+    {
+      "receipt_version": "1",
+      "conversation_id": "392ec8ee-8cc7-472c-a03a-760cd77a6a25",
+      "message_id": "563ca241-2ab2-4b6c-8254-a490e6f95f1d",
+      "request_id": "ebafcc7c-5f9d-4cb1-ae73-c7f96c4e6515",
+      "schema_ref": {
+        "id": "safi.reply.summary",
+        "version": "1.0.0"
+      },
+      "schema_sha256": "07ce6d2102658e437f111ad1944afa305394a8a98b85379da955ec1bcf1ae1af",
+      "outcome": "ok",
+      "error_code": null,
+      "model": "fake-model-1",
+      "openai_request_id": "req_fake_1",
+      "usage": {
+        "input_tokens": 11,
+        "output_tokens": 7
+      },
+      "in_reply_to": "563ca241-2ab2-4b6c-8254-a490e6f95f1d",
+      "at_utc": "2026-11-21T12:36:30.182Z",
+      "latency_ms": 82
+    },
+    {
+      "receipt_version": "1",
+      "conversation_id": "392ec8ee-8cc7-472c-a03a-760cd77a6a25",
+      "message_id": "7c3c71f8-6cdb-4e88-a796-f8589491c889",
+      "request_id": "caef0a08-05dd-4938-af27-492bbf7a42a4",
+      "schema_ref": {
+        "id": "safi.reply.summary",
+        "version": "1.0.0"
+      },
+      "schema_sha256": "07ce6d2102658e437f111ad1944afa305394a8a98b85379da955ec1bcf1ae1af",
+      "outcome": "ok",
+      "error_code": null,
+      "model": "fake-model-1",
+      "openai_request_id": "req_fake_2",
+      "usage": {
+        "input_tokens": 11,
+        "output_tokens": 7
+      },
+      "in_reply_to": "7c3c71f8-6cdb-4e88-a796-f8589491c889",
+      "at_utc": "2026-11-21T12:36:30.518Z",
+      "latency_ms": 11
+    },
+    {
+      "receipt_version": "1",
+      "conversation_id": "392ec8ee-8cc7-472c-a03a-760cd77a6a25",
+      "message_id": "1ae48579-4025-41b1-927e-60854c2d5275",
+      "request_id": "2855cc1a-0c3d-4274-b7bb-f362af022ce9",
+      "schema_ref": {
+        "id": "safi.reply.summary",
+        "version": "1.0.0"
+      },
+      "schema_sha256": "07ce6d2102658e437f111ad1944afa305394a8a98b85379da955ec1bcf1ae1af",
+      "outcome": "ok",
+      "error_code": null,
+      "model": "fake-model-1",
+      "openai_request_id": "req_fake_3",
+      "usage": {
+        "input_tokens": 11,
+        "output_tokens": 7
+      },
+      "in_reply_to": "1ae48579-4025-41b1-927e-60854c2d5275",
+      "at_utc": "2026-11-21T12:36:30.839Z",
+      "latency_ms": 8
+    }
+  ],
+  "status_after": {
+    "api_calls_used": 14,
+    "api_call_cap": 40
+  },
+  "finished_at_utc": "2026-11-21T12:36:31.913Z",
+  "request_ids_sent": [
+    "ebafcc7c-5f9d-4cb1-ae73-c7f96c4e6515",
+    "caef0a08-05dd-4938-af27-492bbf7a42a4",
+    "2855cc1a-0c3d-4274-b7bb-f362af022ce9",
+    "71f07117-d374-4199-8c1b-9848dec4e4fa",
+    "53e7dc66-b5a6-4495-8fe8-d015bda0a491",
+    "06501097-5e59-4305-846b-ab3b5bb2df44",
+    "a163f862-8e0f-41e4-b1bd-aebe531de1b1",
+    "not-a-uuid",
+    "ff5efa62-69de-4209-9459-57f4e59294c6",
+    "974c21fb-fe86-4a05-b53e-ee1df803e4b7",
+    "7a0e4a1b-0e62-48f4-acf2-4b81532d1246",
+    "23b7a29a-d0c4-4fdf-808e-07ef72120f59",
+    "42342304-3e47-4427-9afd-56d5fbb77e1e",
+    "392bce94-94cb-4239-a81c-587538979a2e",
+    "850f5ffb-b65c-4832-a850-cc88e7aea6eb",
+    "fa08d1b1-c7db-454a-a21f-a112e5a1a596",
+    "298d76d3-294b-4069-8901-e2945ffaea45"
+  ],
+  "checks": [
+    {
+      "id": "A02",
+      "name": "three real turns succeed with OpenAI request ids",
+      "result": "PASS",
+      "detail": "ids=req_fake_1,req_fake_2,req_fake_3"
+    },
+    {
+      "id": "A02",
+      "name": "turn 3 uses prior authorized context (mentions teal)",
+      "result": "FAIL",
+      "detail": "reply length 20"
+    },
+    {
+      "id": "A04",
+      "name": "summary body independently matches safi.reply.summary 1.0.0 shape",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "id": "A04",
+      "name": "UI-visible schema id/version/digest returned and match registry",
+      "result": "PASS",
+      "detail": "sha256=07ce6d2102658e437f111ad1944afa305394a8a98b85379da955ec1bcf1ae1af"
+    },
+    {
+      "id": "A05",
+      "name": "tasks schema yields typed tasks, validated",
+      "result": "PASS",
+      "detail": "tasks=1"
+    },
+    {
+      "id": "A06",
+      "name": "unknown envelope field rejected",
+      "result": "PASS",
+      "detail": "status 400 code ingress_rejected calls 13->13"
+    },
+    {
+      "id": "A06",
+      "name": "missing text rejected",
+      "result": "PASS",
+      "detail": "status 400 code ingress_rejected calls 13->13"
+    },
+    {
+      "id": "A06",
+      "name": "oversize text rejected",
+      "result": "PASS",
+      "detail": "status 400 code ingress_rejected calls 13->13"
+    },
+    {
+      "id": "A06",
+      "name": "non-uuid request_id rejected",
+      "result": "PASS",
+      "detail": "status 400 code ingress_rejected calls 13->13"
+    },
+    {
+      "id": "A07",
+      "name": "unknown schema id rejected",
+      "result": "PASS",
+      "detail": "status 400 code schema_rejected calls 13->13"
+    },
+    {
+      "id": "A07",
+      "name": "mismatched schema sha256 rejected",
+      "result": "PASS",
+      "detail": "status 400 code schema_rejected calls 13->13"
+    },
+    {
+      "id": "A07",
+      "name": "browser-supplied raw schema rejected",
+      "result": "PASS",
+      "detail": "status 400 code ingress_rejected calls 13->13"
+    },
+    {
+      "id": "A08",
+      "name": "forged from_guid / to_guid rejected",
+      "result": "PASS",
+      "detail": "status 400 code ingress_rejected calls 13->13"
+    },
+    {
+      "id": "A08",
+      "name": "forged context / role / nats subject rejected",
+      "result": "PASS",
+      "detail": "status 400 code ingress_rejected calls 13->13"
+    },
+    {
+      "id": "A08",
+      "name": "foreign conversation id rejected",
+      "result": "PASS",
+      "detail": "status 403 code routing_rejected calls 13->13"
+    },
+    {
+      "id": "A12",
+      "name": "duplicate request_id launches exactly one OpenAI call",
+      "result": "PASS",
+      "detail": "calls +1, statuses 200/200"
+    },
+    {
+      "id": "A08",
+      "name": "unauthenticated chat rejected",
+      "result": "PASS",
+      "detail": "status 401"
+    },
+    {
+      "id": "A08",
+      "name": "missing CSRF header rejected",
+      "result": "PASS",
+      "detail": "status 403 code ingress_rejected calls 14->14"
+    },
+    {
+      "id": "A08",
+      "name": "a different session cannot use the first session conversation",
+      "result": "PASS",
+      "detail": "status 403 code routing_rejected calls 14->14"
+    },
+    {
+      "id": "A03",
+      "name": "captured real NATS request and reply: valid SAFI JSON, correct GUIDs, context, correlation",
+      "result": "PASS",
+      "detail": "request 1ae48579-4025-41b1-927e-60854c2d5275"
+    },
+    {
+      "id": "A13",
+      "name": "JetStream receipts present for every request sent to NATS in this run",
+      "result": "PASS",
+      "detail": "5/5 receipts"
+    },
+    {
+      "id": "A13",
+      "name": "receipts are redacted (no prompt text, reply text, keys or cookies)",
+      "result": "PASS",
+      "detail": null
+    }
+  ],
+  "overall": "SELFTEST_ONLY",
+  "note": "A01 and A14 require an independent human (see DOGFOOD.md). A09-A11 are covered by tests/e2e and drill:recovery."
+}

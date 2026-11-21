@@ -14,6 +14,8 @@ export interface ServerConfig {
   /** NATS request deadline; injectable so tests do not wait 30 s. */
   natsTimeoutMs: number;
   trustProxy: boolean;
+  /** Host of OPENAI_BASE_URL when set (informational; used by verify:live to refuse fake upstreams). */
+  openaiBaseUrlHost?: string;
 }
 
 export class ConfigError extends Error {
@@ -32,6 +34,15 @@ function intEnv(env: Env, name: string, dflt: number, max?: number): number {
   if (!Number.isInteger(n) || n <= 0) throw new ConfigError(`${name} must be a positive integer`);
   if (max !== undefined && n > max) throw new ConfigError(`${name} must be <= ${max}`);
   return n;
+}
+
+function baseUrlHost(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  try {
+    return new URL(raw).host;
+  } catch {
+    throw new ConfigError('OPENAI_BASE_URL must be a valid URL');
+  }
 }
 
 /** Parses and validates the environment. Throws ConfigError; never echoes secret values. */
@@ -55,5 +66,6 @@ export function loadServerConfig(env: Env = process.env): ServerConfig {
     model: env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
     natsTimeoutMs: REQUEST_DEADLINE_MS,
     trustProxy: env.TRUST_PROXY === 'true',
+    openaiBaseUrlHost: baseUrlHost(env.OPENAI_BASE_URL),
   };
 }

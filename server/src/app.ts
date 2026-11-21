@@ -90,6 +90,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     api_call_cap: config.apiCallCap,
     user_rate_per_min: config.userRatePerMin,
     model: config.model,
+    // "openai" unless OPENAI_BASE_URL points elsewhere. Reflects the server's own environment:
+    // deploy server and worker with the same .env (compose does) so this matches the worker.
+    upstream: !config.openaiBaseUrlHost || config.openaiBaseUrlHost === 'api.openai.com' ? 'openai' : 'custom',
+    openai_base_url_host: config.openaiBaseUrlHost ?? 'api.openai.com',
     nats: deps.natsStatus ? deps.natsStatus() : 'connected',
     worker: { ...worker },
   }));

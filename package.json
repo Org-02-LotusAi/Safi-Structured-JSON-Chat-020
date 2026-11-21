@@ -19,11 +19,15 @@
     "verify:live": "node scripts/verify-live.mjs",
     "schemas:check": "tsc -b shared && node scripts/check-schemas.mjs",
     "nats:fetch": "node scripts/fetch-nats-server.mjs",
-    "certs:dev": "node scripts/gen-dev-cert.mjs"
+    "certs:dev": "node scripts/gen-dev-cert.mjs",
+    "test:e2e": "playwright test",
+    "drill:recovery": "node scripts/recovery-drill.mjs",
+    "share:tunnel": "node scripts/share-tunnel.mjs"
   },
   "devDependencies": {
     "@nats-io/jetstream": "3.5.0",
     "@nats-io/transport-node": "3.5.0",
+    "@playwright/test": "1.65.1",
     "@types/node": "24.19.2",
     "selfsigned": "5.5.0",
     "typescript": "5.9.3",

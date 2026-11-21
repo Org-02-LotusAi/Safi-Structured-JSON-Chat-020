@@ -1,0 +1,14 @@
+[drill 2026-11-21T12:31:24.027Z] target https://localhost:8443; tls verification OFF (localhost dev cert)
+[drill 2026-11-21T12:31:33.031Z] PASS baseline chat ok - status 200
+[drill 2026-11-21T12:31:33.032Z] PASS baseline audit persisted - persisted
+[drill 2026-11-21T12:31:33.374Z] PASS receipts present before drill - messages=8
+[drill 2026-11-21T12:31:34.245Z] worker stopped
+[drill 2026-11-21T12:31:34.261Z] PASS worker down -> worker_unavailable (no false success) - status 504 code worker_unavailable
+[drill 2026-11-21T12:31:35.289Z] worker started
+[drill 2026-11-21T12:31:38.546Z] PASS after worker restart a new request succeeds - status 200
+[drill 2026-11-21T12:31:40.226Z] nats restarted
+[drill 2026-11-21T12:31:41.255Z] PASS receipts persisted across nats restart - before=11 after=11
+[drill 2026-11-21T12:31:49.323Z] chat after nats restart: status 200 code ok (34 ms since restart)
+[drill 2026-11-21T12:31:49.323Z] PASS chat works after nats restart (reconnect) - audit persisted
+[drill 2026-11-21T12:31:49.340Z] PASS new receipts published after recovery - after=11 final=12
+[drill 2026-11-21T12:31:49.417Z] overall PASS; report evidence\recovery\drill-2026-11-21T12-31-49-342Z.json
