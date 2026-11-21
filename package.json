@@ -3,20 +3,29 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "engines": { "node": ">=22" },
-  "workspaces": ["shared", "server", "worker", "web"],
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "shared",
+    "server",
+    "worker",
+    "web"
+  ],
   "scripts": {
     "test": "vitest run",
     "build": "tsc -b shared server worker && npm -w web run build",
     "start": "node scripts/start.mjs",
     "verify:live": "node scripts/verify-live.mjs",
     "schemas:check": "tsc -b shared && node scripts/check-schemas.mjs",
-    "nats:fetch": "node scripts/fetch-nats-server.mjs"
+    "nats:fetch": "node scripts/fetch-nats-server.mjs",
+    "certs:dev": "node scripts/gen-dev-cert.mjs"
   },
   "devDependencies": {
     "@nats-io/jetstream": "3.5.0",
     "@nats-io/transport-node": "3.5.0",
     "@types/node": "24.19.2",
+    "selfsigned": "5.5.0",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
   }

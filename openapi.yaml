@@ -1,0 +1,262 @@
+openapi: 3.1.0
+info:
+  title: SAFI Chat 020 bridge API
+  version: 0.1.0
+  description: >
+    Browser-facing HTTPS API. The browser never supplies identity, context, subject, model or schema bodies;
+    the server binds them. All state-changing POSTs except /api/login require the x-safi-csrf header
+    (token returned by /api/login and /api/session). Authentication is the signed httpOnly cookie safi_session.
+servers:
+  - url: https://localhost:8443
+security:
+  - sessionCookie: []
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe (public)
+      security: []
+      responses:
+        '200':
+          description: Server is up
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean } }, required: [ok], additionalProperties: false }
+  /api/login:
+    post:
+      summary: Log in the single pilot user (revokes any earlier session)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Session created; Set-Cookie safi_session (httpOnly, secure, sameSite=strict)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionView' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { description: 'More than 5 failed logins per 5 minutes from this IP (user_rate_limited)', content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/logout:
+    post:
+      summary: Revoke the current session
+      parameters: [ { $ref: '#/components/parameters/Csrf' } ]
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema: { type: object, properties: { authenticated: { const: false } }, required: [authenticated] }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/session:
+    get:
+      summary: Current session, CSRF token and current conversation
+      security: []
+      responses:
+        '200':
+          description: Session view, or {authenticated:false}
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/SessionView' }
+                  - { type: object, properties: { authenticated: { const: false } }, required: [authenticated] }
+  /api/conversations:
+    post:
+      summary: Start a new server-generated conversation (empty history)
+      parameters: [ { $ref: '#/components/parameters/Csrf' } ]
+      responses:
+        '200':
+          description: New conversation
+          content:
+            application/json:
+              schema: { type: object, properties: { conversation_id: { type: string } }, required: [conversation_id] }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/schemas:
+    get:
+      summary: Selectable reply schemas from the verified registry
+      security: []
+      responses:
+        '200':
+          description: Registry entries marked ui_choice
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schemas:
+                    type: array
+                    items: { $ref: '#/components/schemas/SchemaEntry' }
+                required: [schemas]
+  /api/status:
+    get:
+      summary: Usage, limits and transport state
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Status' }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/chat:
+    post:
+      summary: Send one chat message and receive a schema-validated structured reply
+      description: >
+        Checks run in order: auth, CSRF, strict body (400 ingress_rejected), conversation ownership
+        (403 routing_rejected), schema id/digest (400 schema_rejected), idempotency by (session, request_id)
+        (cached result / 409 duplicate_in_flight / 409 upstream_ambiguous), per-user rate (429 user_rate_limited),
+        global call cap (429 cap_exceeded), then the NATS request (30 s). Worker replies are re-verified
+        server-side; any mismatch is 502 invalid_model_output.
+        Failures that happen before the request is built carry no `audit` field (no receipt exists).
+      parameters: [ { $ref: '#/components/parameters/Csrf' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrowserChatRequest' }
+      responses:
+        '200':
+          description: Valid structured reply
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatSuccess' }
+        '400': { $ref: '#/components/responses/ChatError' }
+        '401': { $ref: '#/components/responses/ChatError' }
+        '403': { $ref: '#/components/responses/ChatError' }
+        '409': { $ref: '#/components/responses/ChatError' }
+        '413': { $ref: '#/components/responses/ChatError' }
+        '422': { description: 'refusal or incomplete', content: { application/json: { schema: { $ref: '#/components/schemas/ChatFailure' } } } }
+        '429': { $ref: '#/components/responses/ChatError' }
+        '502': { description: 'upstream_network, upstream_error or invalid_model_output', content: { application/json: { schema: { $ref: '#/components/schemas/ChatFailure' } } } }
+        '503': { description: 'rate_limited (upstream)', content: { application/json: { schema: { $ref: '#/components/schemas/ChatFailure' } } } }
+        '504': { description: 'worker_unavailable or upstream_timeout', content: { application/json: { schema: { $ref: '#/components/schemas/ChatFailure' } } } }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: safi_session
+  parameters:
+    Csrf:
+      name: x-safi-csrf
+      in: header
+      required: true
+      schema: { type: string }
+      description: Per-session token from /api/login or /api/session
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    ChatError:
+      description: Error (typed)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+  schemas:
+    ErrorCode:
+      type: string
+      enum: [ingress_rejected, schema_rejected, routing_rejected, refusal, incomplete, rate_limited, upstream_timeout, upstream_network, upstream_error, invalid_model_output, worker_unavailable, duplicate_in_flight, upstream_ambiguous, cap_exceeded, user_rate_limited, audit_failed, unauthenticated]
+    ErrorInfo:
+      type: object
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message: { type: string, maxLength: 500 }
+        retryable: { type: boolean }
+      required: [code, message, retryable]
+    ApiError:
+      type: object
+      properties:
+        outcome: { const: error }
+        request_id: { type: string }
+        error: { $ref: '#/components/schemas/ErrorInfo' }
+      required: [outcome, error]
+    LoginRequest:
+      type: object
+      properties:
+        username: { type: string }
+        password: { type: string }
+      required: [username, password]
+      additionalProperties: false
+    SessionView:
+      type: object
+      properties:
+        authenticated: { const: true }
+        username: { type: string }
+        conversation_id: { type: string }
+        expires_at: { type: string, format: date-time }
+        csrf_token: { type: string }
+      required: [authenticated, username, conversation_id, expires_at, csrf_token]
+    SchemaEntry:
+      type: object
+      properties:
+        id: { type: string }
+        version: { type: string }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        label: { type: string }
+        schema:
+          description: The reply JSON Schema (see schemas/reply-*.schema.json), for display only
+          type: object
+      required: [id, version, sha256, label, schema]
+    Status:
+      type: object
+      properties:
+        api_calls_used: { type: integer }
+        api_call_cap: { type: integer }
+        user_rate_per_min: { type: integer }
+        model: { type: string }
+        nats: { enum: [connected, disconnected] }
+        worker:
+          type: object
+          properties:
+            state: { enum: [unknown, responding, unavailable] }
+            last_seen_at: { type: [string, 'null'], format: date-time }
+          required: [state, last_seen_at]
+      required: [api_calls_used, api_call_cap, user_rate_per_min, model, nats, worker]
+    BrowserChatRequest:
+      type: object
+      properties:
+        request_id: { type: string, description: UUID v4 }
+        conversation_id: { type: string }
+        schema_id: { type: string }
+        schema_sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        text: { type: string, minLength: 1, maxLength: 4000 }
+      required: [request_id, conversation_id, schema_id, text]
+      additionalProperties: false
+    ChatResultEnvelope:
+      description: See schemas/chat-result.schema.json; body is validated against the selected reply schema
+      type: object
+    ChatErrorEnvelope:
+      description: See schemas/chat-error.schema.json
+      type: object
+    ChatSuccess:
+      type: object
+      properties:
+        outcome: { const: ok }
+        request_id: { type: string }
+        envelope: { $ref: '#/components/schemas/ChatResultEnvelope' }
+        validation:
+          type: object
+          properties:
+            envelope: { const: pass }
+            body: { const: pass }
+            validator: { const: ajv-2020 }
+          required: [envelope, body, validator]
+        audit: { enum: [persisted, failed] }
+        api_calls_used: { type: integer }
+        api_call_cap: { type: integer }
+      required: [outcome, request_id, envelope, validation, audit, api_calls_used, api_call_cap]
+    ChatFailure:
+      type: object
+      properties:
+        outcome: { const: error }
+        request_id: { type: string }
+        error: { $ref: '#/components/schemas/ErrorInfo' }
+        envelope: { $ref: '#/components/schemas/ChatErrorEnvelope' }
+        audit: { enum: [persisted, failed] }
+      required: [outcome, request_id, error, audit]

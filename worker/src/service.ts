@@ -52,6 +52,7 @@ export async function startWorker(opts: WorkerOptions): Promise<RunningWorker> {
   })();
 
   const sub = nc.subscribe(CHAT_REQUEST_SUBJECT, { queue: WORKER_QUEUE_GROUP });
+  await nc.flush(); // the server has registered the subscription before we report "started"
   const inflight = new Set<Promise<void>>();
 
   const serve = async (msg: { data: Uint8Array; reply?: string; respond: (d: Uint8Array) => boolean }) => {

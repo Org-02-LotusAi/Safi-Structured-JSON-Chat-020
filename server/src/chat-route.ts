@@ -1,0 +1,226 @@
+import {
+  CHAT_REQUEST_SUBJECT,
+  buildRequestEnvelope,
+  formatAjvErrors,
+  newMessageId,
+  redactSecrets,
+  validateBrowserChatRequest,
+  validateRequestEnvelope,
+  type AuditReceipt,
+  type AuditState,
+  type BrowserChatFailure,
+  type BrowserChatResponse,
+  type ErrorCode,
+  type ErrorEnvelope,
+  type ErrorInfo,
+  type RequestEnvelope,
+  type ResultEnvelope,
+} from '@safi/shared';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { requireCsrf, requireSession, sendError, type AuthContext } from './auth.js';
+import type { AppDeps } from './deps.js';
+import { SlidingWindowLimiter } from './limits.js';
+import { verifyReply } from './reply-check.js';
+import { appendTurn, historyMessages, setRequestState, type Session } from './sessions.js';
+
+/** HTTP status for typed worker errors (anything unlisted is a bad-gateway). */
+const HTTP_BY_CODE: Partial<Record<ErrorCode, number>> = {
+  refusal: 422,
+  incomplete: 422,
+  rate_limited: 503,
+  upstream_timeout: 504,
+  upstream_network: 502,
+  upstream_error: 502,
+  invalid_model_output: 502,
+  schema_rejected: 400,
+  routing_rejected: 403,
+};
+
+export interface WorkerState {
+  state: 'unknown' | 'responding' | 'unavailable';
+  last_seen_at: string | null;
+}
+
+export interface ChatContext extends AuthContext {
+  deps: AppDeps;
+  worker: WorkerState;
+}
+
+const MAX_HISTORY_TEXT = 8000;
+
+export function registerChatRoute(app: FastifyInstance, ctx: ChatContext): void {
+  const { deps, config, clock } = ctx;
+  const userLimiter = new SlidingWindowLimiter(config.userRatePerMin, 60_000, clock);
+  const auth = requireSession(ctx);
+  const nowIso = () => new Date(clock.now()).toISOString();
+
+  async function publishReceipt(receipt: AuditReceipt): Promise<AuditState> {
+    try {
+      await deps.auditPublisher.publish(receipt);
+      return 'persisted';
+    } catch (e) {
+      app.log.error(
+        { code: 'audit_failed', err: redactSecrets(e instanceof Error ? e.message : 'unknown') },
+        'audit receipt was not persisted',
+      );
+      return 'failed';
+    }
+  }
+
+  function failure(
+    requestId: string,
+    code: ErrorCode,
+    message: string,
+    retryable: boolean,
+    audit: AuditState,
+    envelope?: ErrorEnvelope,
+  ): { status: number; body: BrowserChatFailure } {
+    const error: ErrorInfo = { code, message, retryable };
+    return {
+      status: HTTP_BY_CODE[code] ?? 502,
+      body: { outcome: 'error', request_id: requestId, error, ...(envelope ? { envelope } : {}), audit },
+    };
+  }
+
+  /** Pre-NATS rejection: nothing reached the worker, so there is no receipt and no `audit` field. */
+  function reject(reply: FastifyReply, status: number, code: ErrorCode, message: string, requestId: string | null, retryable = false) {
+    return sendError(reply, status, code, message, retryable, requestId ? { request_id: requestId } : {});
+  }
+
+  app.post('/api/chat', { preHandler: [auth, requireCsrf] }, async (req, reply) => {
+    const session = req.safiSession as Session;
+    const raw = req.body as unknown;
+    const maybeId = (raw as { request_id?: unknown } | null)?.request_id;
+    const echoId = typeof maybeId === 'string' && maybeId.length <= 64 ? maybeId : null;
+
+    // 1. strict browser body
+    if (!validateBrowserChatRequest(raw)) {
+      return reject(reply, 400, 'ingress_rejected', formatAjvErrors(validateBrowserChatRequest.errors), echoId);
+    }
+    const body = raw;
+    if (body.text.length > config.maxInputChars) {
+      return reject(reply, 400, 'ingress_rejected', `text exceeds ${config.maxInputChars} characters`, body.request_id);
+    }
+
+    // 2. conversation ownership
+    const turns = session.conversations.get(body.conversation_id);
+    if (!turns) return reject(reply, 403, 'routing_rejected', 'Unknown conversation.', body.request_id);
+
+    // 3. schema must be a registered, UI-selectable entry; optional digest must match
+    const entry = deps.registry.get(body.schema_id);
+    if (!entry || !entry.ui_choice || (body.schema_sha256 !== undefined && body.schema_sha256 !== entry.sha256)) {
+      return reject(reply, 400, 'schema_rejected', 'Unknown or mismatched schema.', body.request_id);
+    }
+
+    // 4. idempotency by (session, request_id)
+    const prior = session.requests.get(body.request_id);
+    if (prior?.state === 'done') return reply.code(prior.status).send(prior.body);
+    if (prior?.state === 'inflight') {
+      return reject(reply, 409, 'duplicate_in_flight', 'This request is already being processed.', body.request_id);
+    }
+    if (prior?.state === 'ambiguous') {
+      return reject(reply, 409, 'upstream_ambiguous', 'Outcome unknown; send a new message.', body.request_id);
+    }
+
+    // 5. per-user rate, 6. global call cap (both before any NATS publish)
+    if (!userLimiter.tryHit()) {
+      return reject(reply, 429, 'user_rate_limited', 'Too many requests; slow down.', body.request_id, true);
+    }
+    if (deps.usage.used() >= config.apiCallCap) {
+      return reject(reply, 429, 'cap_exceeded', 'The pilot API call cap has been reached.', body.request_id);
+    }
+
+    // 7. server-built envelope: identity, context, schema binding and message_id are never browser-supplied
+    const envelope: RequestEnvelope = buildRequestEnvelope({
+      conversation_id: body.conversation_id,
+      text: body.text,
+      history: historyMessages(turns, config.maxTurns),
+      schema_ref: { id: entry.id, version: entry.version },
+      schema_sha256: entry.sha256,
+      message_id: newMessageId(), // fresh per request_id: the worker caches replies by message_id
+    });
+    if (!validateRequestEnvelope(envelope)) {
+      app.log.error({ detail: formatAjvErrors(validateRequestEnvelope.errors) }, 'server built an invalid request envelope');
+      return reject(reply, 500, 'upstream_error', 'Internal error building the request.', body.request_id);
+    }
+
+    // Mark in-flight synchronously (no await since the idempotency check), then count the call.
+    setRequestState(session, body.request_id, { state: 'inflight' });
+    try {
+      await deps.usage.increment();
+    } catch (e) {
+      session.requests.delete(body.request_id);
+      app.log.error({ err: redactSecrets(e instanceof Error ? e.message : 'unknown') }, 'usage counter could not be persisted');
+      return reject(reply, 500, 'upstream_error', 'Internal error recording usage; request not sent.', body.request_id);
+    }
+
+    const startedAt = clock.now();
+    const receiptBase = {
+      receipt_version: '1' as const,
+      conversation_id: envelope.conversation_id,
+      message_id: envelope.message_id,
+      request_id: body.request_id,
+      schema_ref: envelope.schema_ref,
+      schema_sha256: envelope.schema_sha256,
+    };
+    const finish = async (
+      status: number,
+      response: BrowserChatResponse,
+      fields: Pick<AuditReceipt, 'outcome' | 'error_code' | 'model' | 'openai_request_id' | 'usage' | 'in_reply_to'>,
+      cache: boolean,
+    ) => {
+      const audit = await publishReceipt({
+        ...receiptBase,
+        ...fields,
+        at_utc: nowIso(),
+        latency_ms: Math.max(0, clock.now() - startedAt),
+      });
+      const final = { ...response, audit } as BrowserChatResponse;
+      if (cache) setRequestState(session, body.request_id, { state: 'done', status, body: final });
+      return reply.code(status).send(final);
+    };
+
+    // 8. NATS request
+    let rawReply: Uint8Array;
+    try {
+      rawReply = await deps.natsRequester.request(CHAT_REQUEST_SUBJECT, new TextEncoder().encode(JSON.stringify(envelope)), config.natsTimeoutMs);
+    } catch (e) {
+      // Never re-sent: the worker may or may not have seen it, so the request_id becomes ambiguous.
+      setRequestState(session, body.request_id, { state: 'ambiguous' });
+      ctx.worker.state = 'unavailable';
+      app.log.warn({ err: redactSecrets(e instanceof Error ? e.name : 'unknown') }, 'nats request failed');
+      const f = failure(body.request_id, 'worker_unavailable', 'The worker did not respond.', true, 'failed');
+      return finish(504, f.body, { outcome: 'error', error_code: 'worker_unavailable', model: null, openai_request_id: null, usage: null, in_reply_to: null }, false);
+    }
+    ctx.worker.state = 'responding';
+    ctx.worker.last_seen_at = nowIso();
+
+    // 9. verify reply
+    const verdict = verifyReply(rawReply, envelope, entry);
+    if (verdict.kind === 'invalid') {
+      app.log.warn({ reason: verdict.reason }, 'worker reply rejected');
+      const f = failure(body.request_id, 'invalid_model_output', 'The worker reply failed validation and was discarded.', false, 'failed');
+      return finish(f.status, f.body, { outcome: 'error', error_code: 'invalid_model_output', model: null, openai_request_id: null, usage: null, in_reply_to: null }, true);
+    }
+
+    if (verdict.kind === 'error') {
+      const e = verdict.envelope;
+      const f = failure(body.request_id, e.error.code, e.error.message, e.error.retryable, 'failed', e);
+      return finish(f.status, f.body, { outcome: 'error', error_code: e.error.code, model: null, openai_request_id: null, usage: null, in_reply_to: e.in_reply_to }, true);
+    }
+
+    const result: ResultEnvelope = verdict.envelope;
+    const reply_text = typeof result.body.reply === 'string' && result.body.reply.length > 0 ? result.body.reply : '(empty reply)';
+    appendTurn(turns, { user: body.text, assistant: reply_text.slice(0, MAX_HISTORY_TEXT) }, config.maxTurns);
+    const ok: BrowserChatResponse = {
+      outcome: 'ok',
+      request_id: body.request_id,
+      envelope: result,
+      validation: { envelope: 'pass', body: 'pass', validator: 'ajv-2020' },
+      audit: 'failed',
+      api_calls_used: deps.usage.used(),
+      api_call_cap: config.apiCallCap,
+    };
+    return finish(200, ok, { outcome: 'ok', error_code: null, model: result.model, openai_request_id: result.openai_request_id, usage: result.usage, in_reply_to: result.in_reply_to }, true);
+  });
+}
