@@ -49,6 +49,19 @@ export function createAdapter(hooks: AdapterHooks): ChatModelAdapter {
       const ctx = hooks.getContext();
       const text = lastUserText(messages);
       const requestId = crypto.randomUUID();
+      if (!ctx.schemaId || !ctx.schemaSha256) {
+        // Never POST without a loaded schema: the server would reject it and burn a rate-limit slot.
+        const message = 'No reply format is selected or loaded.';
+        return result(message, {
+          kind: 'error',
+          request_id: requestId,
+          schema_id: ctx.schemaId,
+          http_status: null,
+          error: { code: 'schema_rejected', message, retryable: false },
+          audit: 'n/a',
+          client_side: true,
+        });
+      }
       let res: Response;
       try {
         res = await fetch('/api/chat', {
@@ -85,21 +98,38 @@ export function createAdapter(hooks: AdapterHooks): ChatModelAdapter {
         body = null;
       }
 
-      if (res.status === 401) hooks.onUnauthorized();
-      else hooks.onSettled();
-      if (typeof body?.api_calls_used === 'number' && typeof body?.api_call_cap === 'number') {
-        hooks.onUsage(body.api_calls_used, body.api_call_cap);
+      // Responses carrying the counter update the meter directly; only typed failures
+      // without a counter need a separate /api/status refresh.
+      if (res.status === 401) {
+        hooks.onUnauthorized();
+      } else if (typeof body?.api_calls_used === 'number') {
+        if (typeof body?.api_call_cap === 'number') hooks.onUsage(body.api_calls_used, body.api_call_cap);
+      } else {
+        hooks.onSettled();
       }
 
-      if (res.ok && body?.outcome === 'ok' && body.envelope?.body) {
-        const reply = String(body.envelope.body.reply ?? '');
-        return result(reply, {
-          kind: 'ok',
-          request_id: String(body.request_id ?? requestId),
+      if (res.ok && body?.outcome === 'ok') {
+        const reply = body.envelope?.body?.reply;
+        if (typeof reply === 'string') {
+          return result(reply, {
+            kind: 'ok',
+            request_id: String(body.request_id ?? requestId),
+            schema_id: ctx.schemaId,
+            envelope: body.envelope,
+            validation: body.validation,
+            audit: auditOf(body.audit),
+          });
+        }
+        // An ok response without reply text is a contract violation: show it as a rejection, never as an empty success.
+        const message = 'Response missing reply text — REJECTED';
+        return result(message, {
+          kind: 'error',
+          request_id: typeof body.request_id === 'string' ? body.request_id : requestId,
           schema_id: ctx.schemaId,
-          envelope: body.envelope,
-          validation: body.validation,
+          http_status: res.status,
+          error: { code: 'invalid_model_output', message, retryable: false },
           audit: auditOf(body.audit),
+          client_side: true,
         });
       }
 

@@ -137,8 +137,11 @@ function ErrorMessage({ p }: { p: SafiError }) {
         </Badge>
       </div>
       <p className="mt-2 text-sm text-ink">{explainError(p.error.code)}</p>
-      {!rejected && p.error.message && p.error.message !== explainError(p.error.code) && (
-        <p className="mt-1 text-xs text-muted">Server said: {p.error.message}</p>
+      {(p.client_side || !rejected) && p.error.message && p.error.message !== explainError(p.error.code) && (
+        <p className="mt-1 text-xs text-muted">
+          {p.client_side ? 'Detail: ' : 'Server said: '}
+          {p.error.message}
+        </p>
       )}
       <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-3">
         <MetaRow label="HTTP status">{p.http_status ?? 'n/a'}</MetaRow>

@@ -20,6 +20,8 @@ export function ChatScreen({ session, onSignedOut }: Props) {
   const [schemaId, setSchemaId] = useState('');
   const [usage, setUsage] = useState<{ used: number; cap: number } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [schemasLoading, setSchemasLoading] = useState(true);
+  const [schemasError, setSchemasError] = useState<string | null>(null);
 
   // The adapter is created once and reads current values through this ref.
   const ctxRef = useRef({ schemas, schemaId, conversationId, csrf });
@@ -53,8 +55,12 @@ export function ChatScreen({ session, onSignedOut }: Props) {
       (list) => {
         setSchemas(list);
         setSchemaId((cur) => cur || list[0]?.id || '');
+        setSchemasLoading(false);
       },
-      (e: unknown) => setLoadError(e instanceof Error ? e.message : 'Could not load reply formats.'),
+      (e: unknown) => {
+        setSchemasError(e instanceof Error ? e.message : 'Could not load reply formats.');
+        setSchemasLoading(false);
+      },
     );
     getStatus().then(
       (s) => setUsage({ used: s.api_calls_used, cap: s.api_call_cap }),
@@ -81,6 +87,14 @@ export function ChatScreen({ session, onSignedOut }: Props) {
 
   const selected = schemas.find((s) => s.id === schemaId);
   const atCap = usage !== null && usage.used >= usage.cap;
+  const schemaReady = schemaId !== '';
+  const composerNotice = schemasLoading
+    ? 'Loading reply formats…'
+    : schemasError
+      ? 'Reply formats could not be loaded, so sending is disabled. Reload the page to try again.'
+      : schemaReady
+        ? null
+        : 'No reply formats are available, so sending is disabled.';
 
   return (
     <div className="flex h-full flex-col">
@@ -128,7 +142,7 @@ export function ChatScreen({ session, onSignedOut }: Props) {
       )}
       <main className="min-h-0 flex-1">
         <AssistantRuntimeProvider runtime={runtime}>
-          <Thread />
+          <Thread sendDisabled={!schemaReady} notice={composerNotice} />
         </AssistantRuntimeProvider>
       </main>
     </div>

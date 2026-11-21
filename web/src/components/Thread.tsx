@@ -19,7 +19,7 @@ function UserMessage() {
   );
 }
 
-function Composer({ maxChars }: { maxChars: number }) {
+function Composer({ maxChars, sendDisabled }: { maxChars: number; sendDisabled: boolean }) {
   return (
     <ComposerPrimitive.Root className="flex items-end gap-2 rounded-lg border border-line bg-surface p-2 shadow-sm focus-within:border-brand">
       <ComposerPrimitive.Input
@@ -27,10 +27,11 @@ function Composer({ maxChars }: { maxChars: number }) {
         placeholder="Ask SAFI something…"
         rows={1}
         maxLength={maxChars}
-        className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-base outline-none placeholder:text-muted"
+        disabled={sendDisabled}
+        className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-base outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-60"
       />
       <ThreadPrimitive.If running={false}>
-        <ComposerPrimitive.Send asChild>
+        <ComposerPrimitive.Send asChild disabled={sendDisabled}>
           <Button aria-label="Send message">
             <SendHorizontal size={16} aria-hidden /> <span className="hidden sm:inline">Send</span>
           </Button>
@@ -47,7 +48,15 @@ function Composer({ maxChars }: { maxChars: number }) {
   );
 }
 
-export function Thread({ maxChars = 4000 }: { maxChars?: number }) {
+export function Thread({
+  maxChars = 4000,
+  sendDisabled = false,
+  notice = null,
+}: {
+  maxChars?: number;
+  sendDisabled?: boolean;
+  notice?: string | null;
+}) {
   return (
     <ThreadPrimitive.Root className="mx-auto flex h-full w-full max-w-3xl flex-col">
       <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-2 py-4" aria-live="polite">
@@ -65,7 +74,12 @@ export function Thread({ maxChars = 4000 }: { maxChars?: number }) {
         </ThreadPrimitive.Messages>
       </ThreadPrimitive.Viewport>
       <div className="px-2 pb-4 pt-2">
-        <Composer maxChars={maxChars} />
+        {notice && (
+          <p role="status" className="px-2 pb-1 text-xs text-muted">
+            {notice}
+          </p>
+        )}
+        <Composer maxChars={maxChars} sendDisabled={sendDisabled} />
       </div>
     </ThreadPrimitive.Root>
   );
