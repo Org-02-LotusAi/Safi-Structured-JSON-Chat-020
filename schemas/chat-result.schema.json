@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://safi.local/schemas/chat-result.schema.json",
+  "title": "chat.result",
+  "type": "object",
+  "properties": {
+    "protocol": {
+      "const": "safi.chat"
+    },
+    "version": {
+      "const": "0.1.0"
+    },
+    "kind": {
+      "const": "chat.result"
+    },
+    "message_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "conversation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "in_reply_to": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "from_guid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "to_guid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "thread_guid": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "subject_guid": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "thread_guid",
+        "subject_guid",
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "schema_ref": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "schema_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sent_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "status": {
+      "const": "ok"
+    },
+    "body": {
+      "type": "object"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "openai_request_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "usage": {
+      "type": "object",
+      "properties": {
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "protocol",
+    "version",
+    "kind",
+    "message_id",
+    "conversation_id",
+    "in_reply_to",
+    "from_guid",
+    "to_guid",
+    "context",
+    "schema_ref",
+    "schema_sha256",
+    "sent_at_utc",
+    "status",
+    "body",
+    "model",
+    "openai_request_id",
+    "usage"
+  ],
+  "additionalProperties": false
+}

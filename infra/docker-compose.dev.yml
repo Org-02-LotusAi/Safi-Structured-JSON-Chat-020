@@ -1,0 +1,6 @@
+# Dev override: expose NATS on loopback only, for running server/worker outside containers.
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up -d nats
+services:
+  nats:
+    ports:
+      - "127.0.0.1:4222:4222"

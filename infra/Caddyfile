@@ -1,0 +1,9 @@
+# Automatic HTTPS for {$SAFI_DOMAIN}. The server speaks TLS on 8443, so Caddy
+# re-encrypts to it and skips verification of the (typically self-signed) internal cert.
+{$SAFI_DOMAIN} {
+	reverse_proxy https://server:8443 {
+		transport http {
+			tls_insecure_skip_verify
+		}
+	}
+}

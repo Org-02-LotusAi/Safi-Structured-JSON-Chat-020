@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://safi.local/schemas/safi.reply.tasks/1.0.0",
+  "title": "Tasks reply",
+  "type": "object",
+  "properties": {
+    "reply": {
+      "type": "string",
+      "description": "The assistant reply shown to the user."
+    },
+    "tasks": {
+      "type": "array",
+      "description": "Action items extracted from the conversation; may be empty.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string",
+            "description": "The task."
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "normal",
+              "low"
+            ],
+            "description": "Task priority."
+          }
+        },
+        "required": [
+          "task",
+          "priority"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "followup_needed": {
+      "type": "boolean",
+      "description": "True if the assistant needs more information from the user."
+    }
+  },
+  "required": [
+    "reply",
+    "tasks",
+    "followup_needed"
+  ],
+  "additionalProperties": false
+}

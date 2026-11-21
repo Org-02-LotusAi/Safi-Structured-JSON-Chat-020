@@ -1,0 +1,8 @@
+{
+  "name": "@safi/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "tsc -b" },
+  "dependencies": { "@safi/shared": "0.1.0" }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://safi.local/schemas/safi.reply.summary/1.0.0",
+  "title": "Summary reply",
+  "type": "object",
+  "properties": {
+    "reply": {
+      "type": "string",
+      "description": "The assistant reply shown to the user."
+    },
+    "tone": {
+      "type": "string",
+      "enum": [
+        "neutral",
+        "friendly"
+      ],
+      "description": "Tone of the reply."
+    },
+    "followup_needed": {
+      "type": "boolean",
+      "description": "True if the assistant needs more information from the user."
+    }
+  },
+  "required": [
+    "reply",
+    "tone",
+    "followup_needed"
+  ],
+  "additionalProperties": false
+}

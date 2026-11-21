@@ -1,0 +1,21 @@
+{
+  "registry_version": "1.0.0",
+  "schemas": [
+    {
+      "id": "safi.reply.summary",
+      "version": "1.0.0",
+      "file": "reply-summary.v1.0.0.schema.json",
+      "sha256": "07ce6d2102658e437f111ad1944afa305394a8a98b85379da955ec1bcf1ae1af",
+      "ui_choice": true,
+      "label": "Summary reply"
+    },
+    {
+      "id": "safi.reply.tasks",
+      "version": "1.0.0",
+      "file": "reply-tasks.v1.0.0.schema.json",
+      "sha256": "79daa35ec7657d952280f511fe00b71081faaaa0606150372e5192ec27c65003",
+      "ui_choice": true,
+      "label": "Task list reply"
+    }
+  ]
+}

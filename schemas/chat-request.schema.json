@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://safi.local/schemas/chat-request.schema.json",
+  "title": "chat.request",
+  "type": "object",
+  "properties": {
+    "protocol": {
+      "const": "safi.chat"
+    },
+    "version": {
+      "const": "0.1.0"
+    },
+    "kind": {
+      "const": "chat.request"
+    },
+    "message_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "conversation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "in_reply_to": {
+      "type": "null"
+    },
+    "from_guid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "to_guid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "thread_guid": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "subject_guid": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "thread_guid",
+        "subject_guid",
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "schema_ref": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "schema_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sent_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "body": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "history": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "enum": [
+                  "user",
+                  "assistant"
+                ]
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8000
+              }
+            },
+            "required": [
+              "role",
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "text",
+        "history"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "protocol",
+    "version",
+    "kind",
+    "message_id",
+    "conversation_id",
+    "in_reply_to",
+    "from_guid",
+    "to_guid",
+    "context",
+    "schema_ref",
+    "schema_sha256",
+    "sent_at_utc",
+    "body"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,66 @@
+# Run from the repo root:  docker compose -f infra/docker-compose.yml up -d --build
+# NATS publishes no host port; worker and server reach it on the internal network.
+services:
+  nats:
+    image: nats:2.11-alpine
+    command: ["-js", "-sd", "/data", "-c", "/etc/nats/nats.conf"]
+    volumes:
+      - ./nats.conf:/etc/nats/nats.conf:ro
+      - nats-data:/data
+    networks: [internal]
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["node", "worker/dist/main.js"]
+    env_file: ../.env
+    environment:
+      NATS_URL: nats://nats:4222
+    depends_on: [nats]
+    networks: [internal]
+    restart: unless-stopped
+
+  server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["node", "server/dist/main.js"]
+    env_file: ../.env
+    environment:
+      NATS_URL: nats://nats:4222
+      DATA_DIR: /app/data
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./certs:/app/certs:ro
+      - server-data:/app/data
+    depends_on: [nats]
+    networks: [internal]
+    restart: unless-stopped
+
+  # Optional public TLS front door:  docker compose --profile public up -d
+  # Needs SAFI_DOMAIN in .env and DNS pointing at this host; Caddy obtains a real certificate.
+  caddy:
+    image: caddy:2-alpine
+    profiles: [public]
+    environment:
+      SAFI_DOMAIN: ${SAFI_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on: [server]
+    networks: [internal]
+    restart: unless-stopped
+
+networks:
+  internal:
+
+volumes:
+  nats-data:
+  server-data:
+  caddy-data:
