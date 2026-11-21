@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "build": "tsc -b" },
-  "dependencies": { "@safi/shared": "0.1.0" }
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@nats-io/transport-node": "3.5.0",
+    "@safi/shared": "0.1.0",
+    "openai": "7.62.0",
+    "pino": "10.4.0"
+  }
 }
