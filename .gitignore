@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+infra/certs/
+.tools/
+data/
+test-results/
+playwright-report/
+.superpowers/
+evidence/live/*.secret*
