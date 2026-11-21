@@ -28,9 +28,15 @@ services:
       dockerfile: Dockerfile
     command: ["node", "server/dist/main.js"]
     env_file: ../.env
+    # env_file loads all of .env, so the server would otherwise see OPENAI_API_KEY.
+    # Only the worker calls OpenAI; blank the key here so it never reaches this container.
+    # TLS paths point at the container mount (./certs on the host -> /app/certs).
     environment:
       NATS_URL: nats://nats:4222
       DATA_DIR: /app/data
+      TLS_CERT_FILE: /app/certs/dev.crt
+      TLS_KEY_FILE: /app/certs/dev.key
+      OPENAI_API_KEY: ""
     ports:
       - "8443:8443"
     volumes:

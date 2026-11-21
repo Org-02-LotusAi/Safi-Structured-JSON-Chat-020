@@ -8,10 +8,13 @@ import {
   buildRequestEnvelope,
   buildResultEnvelope,
   DEFAULT_SCHEMAS_DIR,
+  ERROR_CODES,
   formatAjvErrors,
   loadRegistry,
   OPENAI_SERVICE_GUID,
   PILOT_SENDER_GUID,
+  PILOT_SUBJECT_GUID,
+  PILOT_THREAD_GUID,
   redactSecrets,
   RegistryError,
   validateBrowserChatRequest,
@@ -239,5 +242,18 @@ describe('helpers', () => {
     expect(redactSecrets('key sk-proj-abcdefgh12345678 ok')).toBe('key sk-*** ok');
     expect(redactSecrets('Authorization: Bearer abc123.def')).toBe('Authorization: Bearer ***');
     expect(redactSecrets('nothing here')).toBe('nothing here');
+  });
+});
+
+describe('contract pins', () => {
+  it('ERROR_CODES equals the error.code enum in chat-error.schema.json, in order', () => {
+    const schema = JSON.parse(fs.readFileSync(path.join(DEFAULT_SCHEMAS_DIR, 'chat-error.schema.json'), 'utf8'));
+    expect([...ERROR_CODES]).toEqual(schema.properties.error.properties.code.enum);
+  });
+
+  it('the four GUID constants are 32 lowercase hex characters', () => {
+    for (const g of [PILOT_SENDER_GUID, OPENAI_SERVICE_GUID, PILOT_THREAD_GUID, PILOT_SUBJECT_GUID]) {
+      expect(g).toMatch(/^[0-9a-f]{32}$/);
+    }
   });
 });

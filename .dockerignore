@@ -11,3 +11,4 @@ infra/certs
 tests
 .superpowers
 evidence
+*.tsbuildinfo

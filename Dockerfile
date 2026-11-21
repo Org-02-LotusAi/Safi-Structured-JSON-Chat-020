@@ -18,6 +18,8 @@ COPY worker worker
 COPY web web
 RUN npm run build && npm prune --omit=dev
 
+RUN mkdir -p /app/data && chown node:node /app/data
+
 USER node
 EXPOSE 8443
 CMD ["node", "server/dist/main.js"]
