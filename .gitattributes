@@ -1,0 +1,3 @@
+* text=auto eol=lf
+schemas/** text eol=lf
+*.png binary
