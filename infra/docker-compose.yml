@@ -1,11 +1,13 @@
 # Run from the repo root (the --env-file flag is needed so ${...} below, e.g. NATS_USER, is read
-# from the repo-root .env rather than infra/.env):
+# from the repo-root .env rather than infra/.env). npm wrappers: npm run stack:up / stack:up:dev / stack:down.
 #   docker compose --env-file .env -f infra/docker-compose.yml up -d --build
-# NATS publishes no host port; worker and server reach it on the internal network.
+# NATS publishes no host port here; worker and server reach it on the internal network. To let
+# `npm run verify:live` / `npm run drill:recovery` reach NATS, add the dev override
+# (127.0.0.1:4222 only):  -f infra/docker-compose.dev.yml
 name: safi-chat-020
 services:
   nats:
-    image: nats:2.11-alpine
+    image: nats:2.11.17-alpine
     # Only NATS_USER / NATS_PASS reach this container (not the rest of .env). If NATS_USER is set,
     # authentication is enabled; the worker and server pick the same values up from .env.
     entrypoint: ["/bin/sh", "-c"]
@@ -58,8 +60,12 @@ services:
       TLS_CERT_FILE: /app/certs/dev.crt
       TLS_KEY_FILE: /app/certs/dev.key
       OPENAI_API_KEY: ""
+    # Loopback only by default: the login throttle trusts X-Forwarded-For only for TRUST_PROXY_HOPS hops,
+    # so the port must not be directly reachable by untrusted clients. For public exposure use the
+    # caddy profile below (Caddy reaches this service on the internal network; set TRUST_PROXY_HOPS=1)
+    # or `npm run share:tunnel` (targets localhost:8443; set TRUST_PROXY_HOPS=1).
     ports:
-      - "8443:8443"
+      - "127.0.0.1:8443:8443"
     volumes:
       - ./certs:/app/certs:ro
       - server-data:/app/data

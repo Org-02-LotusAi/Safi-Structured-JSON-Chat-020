@@ -266,4 +266,16 @@ describe('worker handler', () => {
     expect(logs).not.toContain('HISTORY-TEXT-DEF');
     expect(logs).not.toContain('REPLY-CONTENT-XYZ');
   });
+
+  it('logs nothing sensitive when the upstream fails with a body that echoes the key and prompt', async () => {
+    fake.script({ kind: 'http', status: 500 }, { kind: 'destroy' }, { kind: 'refusal' }, { kind: 'text', text: 'not json PROMPT-TEXT-QRS sk-test-ABCDEFGHIJKLMNOP' });
+    for (let i = 0; i < 4; i++) {
+      await handler.handle(req({}, summary, 'PROMPT-TEXT-QRS', [{ role: 'user', text: 'HISTORY-TEXT-TUV' }]));
+    }
+    const logs = logLines.join(String.fromCharCode(10));
+    expect(logs.length).toBeGreaterThan(0);
+    for (const secret of ['sk-test-dummy-key', 'sk-test-ABCDEFGHIJKLMNOP', 'ABCDEFGHIJKLMNOP', 'PROMPT-TEXT-QRS', 'HISTORY-TEXT-TUV']) {
+      expect(logs).not.toContain(secret);
+    }
+  });
 });

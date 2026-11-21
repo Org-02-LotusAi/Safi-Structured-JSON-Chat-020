@@ -2,8 +2,16 @@ import type { AuditReceipt, Registry } from '@safi/shared';
 import type { ServerConfig } from './config.js';
 import type { UsageStore } from './limits.js';
 
+/** Thrown by a NatsRequester when no subscriber was listening: the request was never delivered. */
+export class NoRespondersFailure extends Error {
+  constructor(message = 'no responders') {
+    super(message);
+    this.name = 'NoRespondersFailure';
+  }
+}
+
 export interface NatsRequester {
-  /** Resolves with the raw reply payload; rejects on no-responders, timeout or connection failure. */
+  /** Resolves with the raw reply payload; rejects with NoRespondersFailure when nothing was delivered; any other rejection (timeout, disconnect) means the outcome is unknown. */
   request(subject: string, data: Uint8Array, timeoutMs: number): Promise<Uint8Array>;
 }
 

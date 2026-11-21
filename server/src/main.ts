@@ -3,28 +3,15 @@ import path from 'node:path';
 import { RegistryError, loadRegistry } from '@safi/shared';
 import { buildApp, defaultLoggerOptions } from './app.js';
 import { ConfigError, loadServerConfig } from './config.js';
+import { readTls } from './tls.js';
 import { systemClock } from './deps.js';
 import { FileUsageStore } from './limits.js';
 import { connectNatsAdapters } from './nats-adapters.js';
 
-function readTls(env: NodeJS.ProcessEnv): { key: Buffer; cert: Buffer } | undefined {
-  if (env.TRUST_PROXY === 'true') return undefined;
-  const certFile = env.TLS_CERT_FILE;
-  const keyFile = env.TLS_KEY_FILE;
-  if (!certFile || !keyFile) {
-    throw new ConfigError('TLS_CERT_FILE and TLS_KEY_FILE are required (or set TRUST_PROXY=true behind a TLS proxy); refusing to serve plain HTTP');
-  }
-  try {
-    return { cert: fs.readFileSync(certFile), key: fs.readFileSync(keyFile) };
-  } catch (e) {
-    throw new ConfigError(`cannot read TLS files (run "npm run certs:dev" for a dev certificate): ${(e as Error).message}`);
-  }
-}
-
 async function main(): Promise<void> {
   const env = process.env;
   const config = loadServerConfig(env);
-  const https = readTls(env);
+  const https = readTls(env, config.allowPlainHttp);
 
   let registry;
   try {
@@ -74,7 +61,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 
   await app.listen({ host: env.HOST || '0.0.0.0', port: Number(env.PORT || 8443) });
-  if (!https) app.log.warn('TRUST_PROXY=true: serving plain HTTP; a TLS-terminating proxy must front this port');
+  if (!https) app.log.warn('ALLOW_PLAIN_HTTP_BEHIND_PROXY=true: serving plain HTTP; a TLS-terminating proxy must front this port');
 }
 
 main().catch((e: unknown) => {

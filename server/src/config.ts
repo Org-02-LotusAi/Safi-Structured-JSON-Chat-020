@@ -13,7 +13,10 @@ export interface ServerConfig {
   model: string;
   /** NATS request deadline; injectable so tests do not wait 30 s. */
   natsTimeoutMs: number;
-  trustProxy: boolean;
+  /** Number of trusted reverse-proxy hops (0 = trust none: X-Forwarded-For is ignored). */
+  trustProxy: number;
+  /** Plain HTTP is allowed only with explicit ALLOW_PLAIN_HTTP_BEHIND_PROXY=true (a TLS proxy must front it). */
+  allowPlainHttp: boolean;
   /** Host of OPENAI_BASE_URL when set (informational; used by verify:live to refuse fake upstreams). */
   openaiBaseUrlHost?: string;
 }
@@ -33,6 +36,18 @@ function intEnv(env: Env, name: string, dflt: number, max?: number): number {
   const n = Number(raw);
   if (!Number.isInteger(n) || n <= 0) throw new ConfigError(`${name} must be a positive integer`);
   if (max !== undefined && n > max) throw new ConfigError(`${name} must be <= ${max}`);
+  return n;
+}
+
+function trustProxyHops(env: Env): number {
+  const legacy = env.TRUST_PROXY;
+  if (legacy !== undefined && legacy !== '' && legacy !== 'false') {
+    throw new ConfigError('TRUST_PROXY is no longer supported; set TRUST_PROXY_HOPS to the number of trusted proxy hops (0 = none)');
+  }
+  const raw = env.TRUST_PROXY_HOPS;
+  if (raw === undefined || raw === '') return 0;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0 || n > 10) throw new ConfigError('TRUST_PROXY_HOPS must be an integer between 0 and 10');
   return n;
 }
 
@@ -65,7 +80,8 @@ export function loadServerConfig(env: Env = process.env): ServerConfig {
     bodyLimitBytes: intEnv(env, 'BODY_LIMIT_BYTES', LIMIT_DEFAULTS.BODY_LIMIT_BYTES),
     model: env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
     natsTimeoutMs: REQUEST_DEADLINE_MS,
-    trustProxy: env.TRUST_PROXY === 'true',
+    trustProxy: trustProxyHops(env),
+    allowPlainHttp: env.ALLOW_PLAIN_HTTP_BEHIND_PROXY === 'true',
     openaiBaseUrlHost: baseUrlHost(env.OPENAI_BASE_URL),
   };
 }

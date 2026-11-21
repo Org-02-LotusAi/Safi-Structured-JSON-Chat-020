@@ -18,7 +18,7 @@ import {
 } from '@safi/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { requireCsrf, requireSession, sendError, type AuthContext } from './auth.js';
-import type { AppDeps } from './deps.js';
+import { NoRespondersFailure, type AppDeps } from './deps.js';
 import { SlidingWindowLimiter } from './limits.js';
 import { verifyReply } from './reply-check.js';
 import { appendTurn, historyMessages, setRequestState, type Session } from './sessions.js';
@@ -180,47 +180,91 @@ export function registerChatRoute(app: FastifyInstance, ctx: ChatContext): void 
       return reply.code(status).send(final);
     };
 
-    // 8. NATS request
-    let rawReply: Uint8Array;
+    // 8. NATS request. Everything from here on is guarded: an unexpected throw must never leave the
+    // request_id stuck "inflight" (M1).
+    let sent = false;
     try {
-      rawReply = await deps.natsRequester.request(CHAT_REQUEST_SUBJECT, new TextEncoder().encode(JSON.stringify(envelope)), config.natsTimeoutMs);
+      let rawReply: Uint8Array;
+      try {
+        sent = true;
+        rawReply = await deps.natsRequester.request(CHAT_REQUEST_SUBJECT, new TextEncoder().encode(JSON.stringify(envelope)), config.natsTimeoutMs);
+      } catch (e) {
+        ctx.worker.state = 'unavailable';
+        if (e instanceof NoRespondersFailure) {
+          // Nothing was delivered, so a same-id retry is safe: forget the request state.
+          session.requests.delete(body.request_id);
+          app.log.warn({ code: 'worker_unavailable', request_id: body.request_id }, 'no responders; request was not delivered');
+          const f = failure(body.request_id, 'worker_unavailable', 'The AI worker is not running (no responders). Nothing was sent; try again shortly.', true, 'failed');
+          return await finish(504, f.body, { outcome: 'error', error_code: 'worker_unavailable', model: null, openai_request_id: null, usage: null, in_reply_to: null }, false);
+        }
+        // Timeout or disconnect after delivery: the worker may have called OpenAI. Never re-sent.
+        setRequestState(session, body.request_id, { state: 'ambiguous' });
+        app.log.warn(
+          { code: 'upstream_ambiguous', request_id: body.request_id, message_id: envelope.message_id, conversation_id: envelope.conversation_id, err: e instanceof Error ? e.name : 'unknown' },
+          'ambiguous outcome; not retried',
+        );
+        const f = failure(
+          body.request_id,
+          'upstream_ambiguous',
+          `Outcome unknown: the request reached the worker but no reply arrived within ${Math.round(config.natsTimeoutMs / 1000)} s. It was not retried; send a new message.`,
+          false,
+          'failed',
+        );
+        return await finish(504, f.body, { outcome: 'error', error_code: 'upstream_ambiguous', model: null, openai_request_id: null, usage: null, in_reply_to: null }, false);
+      }
+      ctx.worker.state = 'responding';
+      ctx.worker.last_seen_at = nowIso();
+
+      // 9. verify reply
+      const verdict = verifyReply(rawReply, envelope, entry);
+      if (verdict.kind === 'invalid') {
+        app.log.warn({ reason: verdict.reason }, 'worker reply rejected');
+        const f = failure(body.request_id, 'invalid_model_output', 'The worker reply failed validation and was discarded.', false, 'failed');
+        return await finish(f.status, f.body, { outcome: 'error', error_code: 'invalid_model_output', model: null, openai_request_id: null, usage: null, in_reply_to: null }, true);
+      }
+
+      if (verdict.kind === 'error') {
+        const e = verdict.envelope;
+        // M6: the browser-facing message is redacted and capped; the schema-checked envelope is passed through with the same redaction.
+        const safeMessage = redactSecrets(e.error.message).slice(0, 500);
+        const safeEnvelope: ErrorEnvelope = { ...e, error: { ...e.error, message: safeMessage } };
+        const f = failure(body.request_id, e.error.code, safeMessage, e.error.retryable, 'failed', safeEnvelope);
+        return await finish(f.status, f.body, { outcome: 'error', error_code: e.error.code, model: null, openai_request_id: null, usage: null, in_reply_to: e.in_reply_to }, true);
+      }
+
+      const result: ResultEnvelope = verdict.envelope;
+      const reply_text = typeof result.body.reply === 'string' && result.body.reply.length > 0 ? result.body.reply : '(empty reply)';
+      appendTurn(turns, { user: body.text, assistant: reply_text.slice(0, MAX_HISTORY_TEXT) }, config.maxTurns);
+      const ok: BrowserChatResponse = {
+        outcome: 'ok',
+        request_id: body.request_id,
+        envelope: result,
+        validation: { envelope: 'pass', body: 'pass', validator: 'ajv-2020' },
+        audit: 'failed',
+        api_calls_used: deps.usage.used(),
+        api_call_cap: config.apiCallCap,
+      };
+      return await finish(200, ok, { outcome: 'ok', error_code: null, model: result.model, openai_request_id: result.openai_request_id, usage: result.usage, in_reply_to: result.in_reply_to }, true);
     } catch (e) {
-      // Never re-sent: the worker may or may not have seen it, so the request_id becomes ambiguous.
-      setRequestState(session, body.request_id, { state: 'ambiguous' });
-      ctx.worker.state = 'unavailable';
-      app.log.warn({ err: redactSecrets(e instanceof Error ? e.name : 'unknown') }, 'nats request failed');
-      const f = failure(body.request_id, 'worker_unavailable', 'The worker did not respond.', true, 'failed');
-      return finish(504, f.body, { outcome: 'error', error_code: 'worker_unavailable', model: null, openai_request_id: null, usage: null, in_reply_to: null }, false);
+      app.log.error({ code: 'chat_route_unexpected', request_id: body.request_id, err: e instanceof Error ? e.name : 'unknown' }, 'unexpected error handling chat request');
+      if (reply.sent) throw e;
+      const current = session.requests.get(body.request_id);
+      if (current?.state === 'inflight') {
+        if (sent) setRequestState(session, body.request_id, { state: 'ambiguous' });
+        else session.requests.delete(body.request_id);
+      }
+      const f = failure(
+        body.request_id,
+        'upstream_error',
+        sent ? 'Internal error after the request was sent; outcome unknown. Send a new message.' : 'Internal error; request not sent.',
+        false,
+        'failed',
+      );
+      try {
+        return await finish(502, f.body, { outcome: 'error', error_code: 'upstream_error', model: null, openai_request_id: null, usage: null, in_reply_to: null }, false);
+      } catch {
+        return reply.code(502).send(f.body);
+      }
     }
-    ctx.worker.state = 'responding';
-    ctx.worker.last_seen_at = nowIso();
-
-    // 9. verify reply
-    const verdict = verifyReply(rawReply, envelope, entry);
-    if (verdict.kind === 'invalid') {
-      app.log.warn({ reason: verdict.reason }, 'worker reply rejected');
-      const f = failure(body.request_id, 'invalid_model_output', 'The worker reply failed validation and was discarded.', false, 'failed');
-      return finish(f.status, f.body, { outcome: 'error', error_code: 'invalid_model_output', model: null, openai_request_id: null, usage: null, in_reply_to: null }, true);
-    }
-
-    if (verdict.kind === 'error') {
-      const e = verdict.envelope;
-      const f = failure(body.request_id, e.error.code, e.error.message, e.error.retryable, 'failed', e);
-      return finish(f.status, f.body, { outcome: 'error', error_code: e.error.code, model: null, openai_request_id: null, usage: null, in_reply_to: e.in_reply_to }, true);
-    }
-
-    const result: ResultEnvelope = verdict.envelope;
-    const reply_text = typeof result.body.reply === 'string' && result.body.reply.length > 0 ? result.body.reply : '(empty reply)';
-    appendTurn(turns, { user: body.text, assistant: reply_text.slice(0, MAX_HISTORY_TEXT) }, config.maxTurns);
-    const ok: BrowserChatResponse = {
-      outcome: 'ok',
-      request_id: body.request_id,
-      envelope: result,
-      validation: { envelope: 'pass', body: 'pass', validator: 'ajv-2020' },
-      audit: 'failed',
-      api_calls_used: deps.usage.used(),
-      api_call_cap: config.apiCallCap,
-    };
-    return finish(200, ok, { outcome: 'ok', error_code: null, model: result.model, openai_request_id: result.openai_request_id, usage: result.usage, in_reply_to: result.in_reply_to }, true);
   });
 }

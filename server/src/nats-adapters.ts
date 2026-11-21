@@ -6,8 +6,8 @@ import {
   type AuditReceipt,
 } from '@safi/shared';
 import { jetstream, jetstreamManager, StorageType, JetStreamApiCodes, JetStreamApiError, type JetStreamManager } from '@nats-io/jetstream';
-import { connect, type NatsConnection } from '@nats-io/transport-node';
-import type { AuditPublisher, NatsRequester } from './deps.js';
+import { NoRespondersError, RequestError, connect, type NatsConnection } from '@nats-io/transport-node';
+import { NoRespondersFailure, type AuditPublisher, type NatsRequester } from './deps.js';
 
 const AUDIT_ACK_TIMEOUT_MS = 5000;
 
@@ -73,8 +73,15 @@ export async function connectNatsAdapters(opts: NatsConnectOptions): Promise<Nat
   return {
     requester: {
       async request(subject, data, timeoutMs) {
-        const msg = await nc.request(subject, data, { timeout: timeoutMs });
-        return msg.data;
+        try {
+          const msg = await nc.request(subject, data, { timeout: timeoutMs });
+          return msg.data;
+        } catch (e) {
+          if (e instanceof NoRespondersError || (e instanceof RequestError && e.isNoResponders())) {
+            throw new NoRespondersFailure('no responders');
+          }
+          throw e;
+        }
       },
     },
     audit: {

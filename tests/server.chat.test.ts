@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { OPENAI_SERVICE_GUID, PILOT_SENDER_GUID, type ErrorCode, type RequestEnvelope } from '../shared/src/index.js';
+import { NoRespondersFailure } from '../server/src/deps.js';
 import { FileUsageStore } from '../server/src/limits.js';
 import { TASKS_ID, chat, login, makeHarness } from './helpers/server-harness.js';
 
@@ -248,16 +249,33 @@ describe('typed worker errors (A10)', () => {
 });
 
 describe('idempotency and ambiguity (A11/A12)', () => {
-  it('no responders / timeout gives 504 worker_unavailable and the same request_id is then 409 upstream_ambiguous', async () => {
-    for (const err of [new Error('503 no responders'), Object.assign(new Error('timeout'), { name: 'TimeoutError' })]) {
+  it('no responders gives 504 worker_unavailable (retryable) and the same request_id may be retried', async () => {
+    const h = await makeHarness();
+    h.nats.failWith = new NoRespondersFailure();
+    const l = await login(h.app);
+    const request_id = randomUUID();
+    const first = await chat(h.app, l, { request_id });
+    expect(first.statusCode).toBe(504);
+    expect(first.json().error).toMatchObject({ code: 'worker_unavailable', retryable: true });
+    expect(h.audit.receipts[0]).toMatchObject({ outcome: 'error', error_code: 'worker_unavailable' });
+    h.nats.failWith = null;
+    const retry = await chat(h.app, l, { request_id }); // nothing was delivered, so a same-id retry is safe
+    expect(retry.statusCode).toBe(200);
+    expect(h.nats.requests).toHaveLength(2);
+  });
+
+  it('a timeout after delivery gives 504 upstream_ambiguous (not retryable), is never re-sent, and replays as 409', async () => {
+    for (const err of [new Error('TIMEOUT'), Object.assign(new Error('timeout'), { name: 'TimeoutError' })]) {
       const h = await makeHarness();
       h.nats.failWith = err;
       const l = await login(h.app);
       const request_id = randomUUID();
       const first = await chat(h.app, l, { request_id });
       expect(first.statusCode).toBe(504);
-      expect(first.json().error.code).toBe('worker_unavailable');
-      expect(h.audit.receipts[0]).toMatchObject({ outcome: 'error', error_code: 'worker_unavailable' });
+      expect(first.json().error).toMatchObject({ code: 'upstream_ambiguous', retryable: false });
+      expect(first.json().error.message).toContain('send a new message');
+      expect(h.audit.receipts[0]).toMatchObject({ outcome: 'error', error_code: 'upstream_ambiguous' });
+      expect(h.nats.requests).toHaveLength(1);
       h.nats.failWith = null;
       const retry = await chat(h.app, l, { request_id });
       expect(retry.statusCode).toBe(409);
@@ -267,6 +285,44 @@ describe('idempotency and ambiguity (A11/A12)', () => {
       // a brand-new request_id works again once the worker is back
       expect((await chat(h.app, l)).statusCode).toBe(200);
     }
+  });
+
+  it('an unexpected throw after dispatch marks the request ambiguous, returns 502 and never stays in flight (M1)', async () => {
+    let calls = 0;
+    const usage = {
+      used: () => {
+        calls += 1;
+        if (calls >= 2) throw new Error('boom'); // 1 = cap check, 2 = building the ok response
+        return 0;
+      },
+      increment: async () => 1,
+    };
+    const h = await makeHarness({ usage });
+    const l = await login(h.app);
+    const request_id = randomUUID();
+    const res = await chat(h.app, l, { request_id });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error).toMatchObject({ code: 'upstream_error', retryable: false });
+    expect(h.nats.requests).toHaveLength(1);
+    const replay = await chat(h.app, l, { request_id });
+    expect(replay.statusCode).toBe(409);
+    expect(replay.json().error.code).toBe('upstream_ambiguous');
+    expect(h.nats.requests).toHaveLength(1);
+  });
+
+  it('redacts secrets in a worker error message before it reaches the browser (M6)', async () => {
+    const h = await makeHarness();
+    h.nats.reply = (req) => {
+      const e = h.nats.err(req, 'upstream_error');
+      return { ...e, error: { ...e.error, message: 'bad key sk-test-ABCDEFGHIJKLMNOP and Bearer abc.def.ghi' } };
+    };
+    const l = await login(h.app);
+    const res = await chat(h.app, l);
+    const raw = res.body;
+    expect(raw).not.toContain('sk-test-ABCDEFGHIJKLMNOP');
+    expect(raw).not.toContain('abc.def.ghi');
+    expect(res.json().error.message).toContain('sk-***');
+    expect(res.json().envelope.error.message).not.toContain('ABCDEFGHIJKLMNOP');
   });
 
   it('a completed duplicate returns the cached response with no second NATS request', async () => {

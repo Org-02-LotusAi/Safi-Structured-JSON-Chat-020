@@ -1,6 +1,6 @@
 // Recovery drill for a docker compose deployment (SOW A11 + A13).
 //   1. baseline chat succeeds
-//   2. stop worker  -> chat must fail with worker_unavailable (no false success)
+//   2. stop worker  -> chat must fail with worker_unavailable (no responders: nothing delivered, no false success)
 //   3. start worker -> a new chat must succeed
 //   4. restart nats -> JetStream audit receipts must still be present, and a new chat must succeed
 // Run from the repo root after:  docker compose --env-file .env -f infra/docker-compose.yml up -d --build
@@ -198,7 +198,8 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const gitSha = (() => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root }).toString().trim(); } catch { return null; } })();
-  const report = { drill: 'recovery', at_utc: new Date().toISOString(), git_sha: gitSha, target: baseUrl.origin, overall: passed ? 'PASS' : 'FAIL', stream_before: before, stream_final: final, checks };
+  const gitDirty = (() => { try { return execFileSync('git', ['status', '--porcelain'], { cwd: root }).toString().trim().length > 0; } catch { return null; } })();
+  const report = { drill: 'recovery', at_utc: new Date().toISOString(), git_sha: gitSha, git_dirty: gitDirty, target: baseUrl.origin, overall: passed ? 'PASS' : 'FAIL', stream_before: before, stream_final: final, checks };
   const file = path.join(outDir, `drill-${stamp}.json`);
   fs.writeFileSync(file, JSON.stringify(report, null, 2) + '\n');
   log(`overall ${report.overall}; report ${path.relative(root, file)}`);

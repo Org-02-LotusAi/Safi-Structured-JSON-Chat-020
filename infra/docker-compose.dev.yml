@@ -1,5 +1,9 @@
-# Dev override: expose NATS on loopback only, for running server/worker outside containers.
-#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up -d nats
+# Dev override: expose NATS on loopback only (127.0.0.1:4222), so host-side tools
+# (npm run verify:live, npm run drill:recovery, or server/worker run via npm run start) can reach it.
+# NATS_USER / NATS_PASS from .env still apply: the server requires them for every client.
+# Run from the repo root:
+#   docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up -d nats
+#   docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up -d --build   (everything)
 services:
   nats:
     ports:

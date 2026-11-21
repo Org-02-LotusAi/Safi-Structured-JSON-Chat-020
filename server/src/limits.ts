@@ -29,7 +29,13 @@ export class FailureThrottle {
     private readonly max: number,
     private readonly windowMs: number,
     private readonly clock: Clock,
+    private readonly maxKeys = 10_000,
   ) {}
+
+  /** Number of tracked keys (exposed for tests: the map must stay bounded). */
+  get size(): number {
+    return this.failures.size;
+  }
 
   private recent(key: string): number[] {
     const cutoff = this.clock.now() - this.windowMs;
@@ -47,10 +53,54 @@ export class FailureThrottle {
     const list = this.recent(key);
     list.push(this.clock.now());
     this.failures.set(key, list);
+    // Bound memory: Map iterates in insertion order, so the first key is the oldest-inserted one.
+    while (this.failures.size > this.maxKeys) {
+      const oldest = this.failures.keys().next().value as string;
+      this.failures.delete(oldest);
+    }
   }
 
   reset(key: string): void {
     this.failures.delete(key);
+  }
+}
+
+/**
+ * Account-wide brake for distributed guessing: once `max` failures (any IP) land inside the window,
+ * further login attempts are admitted at most once per `slowIntervalMs`. It slows; it never locks
+ * the account permanently (the window slides and the real user can still get in).
+ */
+export class GlobalFailureCeiling {
+  private failures: number[] = [];
+  private lastAdmitted = Number.NEGATIVE_INFINITY;
+  constructor(
+    private readonly max: number,
+    private readonly windowMs: number,
+    private readonly slowIntervalMs: number,
+    private readonly clock: Clock,
+  ) {}
+
+  private prune(): void {
+    const cutoff = this.clock.now() - this.windowMs;
+    this.failures = this.failures.filter((t) => t > cutoff);
+  }
+
+  /** True when this attempt may proceed. Under the ceiling every attempt is admitted. */
+  admit(): boolean {
+    this.prune();
+    const now = this.clock.now();
+    if (this.failures.length < this.max) return true;
+    if (now - this.lastAdmitted >= this.slowIntervalMs) {
+      this.lastAdmitted = now;
+      return true;
+    }
+    return false;
+  }
+
+  recordFailure(): void {
+    this.prune();
+    this.failures.push(this.clock.now());
+    if (this.failures.length > this.max * 4) this.failures.splice(0, this.failures.length - this.max * 4);
   }
 }
 

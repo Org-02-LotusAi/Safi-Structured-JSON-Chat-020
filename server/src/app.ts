@@ -47,9 +47,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const options = {
     logger: deps.logger === undefined ? defaultLoggerOptions() : deps.logger,
     bodyLimit: config.bodyLimitBytes,
-    trustProxy: config.trustProxy,
+    // 0 = trust none (XFF ignored); n > 0 = trust the n nearest hops. Fastify fails closed on a bare number,
+    // so use an explicit hop function. The port must only be reachable via those proxies (see README).
+    trustProxy: config.trustProxy === 0 ? false : (_addr: string, hop: number) => hop < config.trustProxy,
     ...(deps.https ? { https: deps.https } : {}),
-  } as FastifyServerOptions;
+  } as unknown as FastifyServerOptions;
   const app = Fastify(options) as unknown as FastifyInstance;
 
   await app.register(fastifyCookie, { secret: config.sessionSecret });

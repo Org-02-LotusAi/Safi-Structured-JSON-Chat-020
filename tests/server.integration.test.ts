@@ -131,4 +131,39 @@ describe('server + real NATS + real worker + fake OpenAI', () => {
     expect((await receipts()).map((r) => r.error_code)).toEqual([null, null, 'worker_unavailable', null]);
     expect(JSON.parse(fs.readFileSync(path.join(dataDir, 'usage.json'), 'utf8'))).toEqual({ api_calls_used: 4 });
   });
+
+  it('a worker that receives a request and never replies gives upstream_ambiguous, not worker_unavailable (A12)', async () => {
+    await worker!.stop();
+    worker = undefined;
+    const received: string[] = [];
+    const silent = await connect({ servers: nats.url });
+    const sub = silent.subscribe('safi.chat.request.v1', { callback: (_err, m) => void received.push(m.subject) });
+    await silent.flush();
+    const crashApp = await buildApp({
+      config: testConfig({ natsTimeoutMs: 400 }),
+      registry: loadRegistry(),
+      natsRequester: adapters.requester,
+      auditPublisher: adapters.audit,
+      clock: systemClock,
+      usage: new FileUsageStore(dataDir),
+      logger: false,
+      natsStatus: adapters.status,
+    });
+    try {
+      const l = await login(crashApp);
+      const res = await chat(crashApp, l, { text: 'will the worker crash?' });
+      expect(res.statusCode).toBe(504);
+      expect(res.json().error).toMatchObject({ code: 'upstream_ambiguous', retryable: false });
+      expect(received).toHaveLength(1); // it was delivered
+      const again = await chat(crashApp, l, { request_id: res.json().request_id });
+      expect(again.statusCode).toBe(409);
+      expect(received).toHaveLength(1); // never re-sent
+      const last = (await receipts()).at(-1)!;
+      expect(last.error_code).toBe('upstream_ambiguous');
+    } finally {
+      sub.unsubscribe();
+      await silent.drain();
+      await crashApp.close();
+    }
+  });
 });

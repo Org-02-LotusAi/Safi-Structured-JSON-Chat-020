@@ -81,3 +81,61 @@ Visible defect count: ______ (write 0 if none)
 
 SAFI alone decides acceptance. A completed form does not by itself make A01 or A14 `PASS`: update `ACCEPTANCE.json`
 and `evidence/MANIFEST.md` only with the real, committed evidence.
+
+---
+
+# Newcomer onboarding rehearsal (README only, SOW §11)
+
+Purpose: prove that a person who has never seen the project can reach a working chat in 30 minutes or less using **only
+the README** (the "SOW §8 operator sequence" section), with no developer help. Nothing here is filled in yet; in
+`ACCEPTANCE.json` this is `sow_section_11.onboarding_rehearsal` = `PENDING_HUMAN`.
+
+| Field | Value |
+|---|---|
+| Person (not a developer of this product) | |
+| Start (UTC) | |
+| End (UTC) | |
+| Machine / OS / Node version / Docker version | |
+| Git SHA cloned | |
+| Path used (A: everything in Docker, or B: NATS in Docker + `npm run start`) | |
+| Minute at which a working chat was reached (a real answer on screen) | |
+| Where they got stuck (step, error text, how long) | |
+| Anything they had to ask the developer (must be "nothing" to pass) | |
+| Result: PASS only if working chat reached in 30 minutes or less, README only, no developer help | |
+
+Commands run, in order (the person pastes exactly what they typed, with the minute each finished):
+
+| # | Command | Minute finished | Worked first time (yes/no) | Note |
+|---|---|---|---|---|
+| | | | | |
+
+Observer signature and date:
+
+# Recovery drill on the real-OpenAI deployment (SOW §11)
+
+The committed drill evidence (`evidence/recovery/`) used a **fake** upstream on a local machine. This section records the
+same drill on the real deployment. In `ACCEPTANCE.json` this is `sow_section_11.recovery_on_live_deployment` = `BLOCKED`
+until a real key and deployment exist. Do not run it during the 30-minute dogfood session (it stops the worker and
+restarts NATS).
+
+Operator steps (from the repository root, on the host that runs the compose stack, with the real `.env`):
+
+1. `npm run stack:up:dev` (or confirm it is running); confirm `OPENAI_BASE_URL` is empty in `.env`.
+2. `DRILL_BASE_URL=https://<the URL users use> npm run drill:recovery` (PowerShell: `$env:DRILL_BASE_URL="https://..."; npm run drill:recovery`).
+   Use `DRILL_STRICT_TLS=1` when the URL has a real certificate.
+3. Confirm every line is PASS and that the baseline and the post-restart chats show `req_...` OpenAI request IDs in the UI
+   (open the site, ask one question after the drill, copy the **OpenAI request ID**).
+
+| Field | Value |
+|---|---|
+| Operator | |
+| Date / start-end (UTC) | |
+| Git SHA deployed (and `git_dirty` in the report must be `false`) | |
+| URL | |
+| Report file under `evidence/recovery/` | |
+| Baseline chat OpenAI request ID | |
+| After worker restart: new chat succeeded (OpenAI request ID) | |
+| After NATS restart: receipts preserved and new chat succeeded (OpenAI request ID) | |
+| Worker-down result was `worker_unavailable` with no false success (yes/no) | |
+| Overall (PASS / FAIL) | |
+

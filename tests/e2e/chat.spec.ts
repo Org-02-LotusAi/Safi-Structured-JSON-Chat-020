@@ -40,6 +40,8 @@ async function send(page: Page, text: string): Promise<void> {
 test.describe.configure({ mode: 'serial' });
 
 test.describe('SAFI Chat over real HTTPS and NATS', () => {
+  // Needs the local test stack (fake OpenAI + control server); skipped against a live deployment.
+  test.skip(!CONTROL, 'needs the local test stack (E2E_START_STACK=1)');
   let page: Page;
 
   test.beforeAll(async ({ browser }) => {
@@ -143,6 +145,7 @@ test.describe('SAFI Chat over real HTTPS and NATS', () => {
     const err = page.getByTestId('assistant-error').last();
     await expect(err).toContainText('worker_unavailable');
     await expect(err).toContainText('offline');
+    await expect(err).toContainText('not delivered');
     expect((await ctl('GET', '/requests')).length).toBe(before); // no upstream call, no fake success
     await page.screenshot({ path: path.join(shots, '05-worker-offline.png'), fullPage: true });
 

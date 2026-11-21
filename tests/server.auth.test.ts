@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { PILOT_PASS, PILOT_USER, chat, login, makeHarness } from './helpers/server-harness.js';
+import { FailureThrottle, GlobalFailureCeiling } from '../server/src/limits.js';
+import { ConfigError, loadServerConfig } from '../server/src/config.js';
+import { readTls } from '../server/src/tls.js';
+import { FakeClock, PILOT_PASS, PILOT_USER, chat, login, makeHarness } from './helpers/server-harness.js';
 
 describe('auth and sessions', () => {
   it('requires auth for protected routes', async () => {
@@ -136,5 +139,83 @@ describe('auth and sessions', () => {
     const l = await login(h.app);
     const res = await h.app.inject({ method: 'GET', url: '/api/status', headers: { cookie: l.cookie } });
     expect(res.json()).toMatchObject({ upstream: 'custom', openai_base_url_host: '127.0.0.1:9999' });
+  });
+});
+
+const BAD = { username: PILOT_USER, password: 'wrong-password-123' };
+const GOOD = { username: PILOT_USER, password: PILOT_PASS };
+const loginFrom = (h: Awaited<ReturnType<typeof makeHarness>>, xff: string, payload = BAD) =>
+  h.app.inject({ method: 'POST', url: '/api/login', headers: { 'x-forwarded-for': xff }, payload });
+
+describe('login throttling, proxy trust and bounded state (I2)', () => {
+  it('with trustProxy 1, failures from one forwarded client do not block another', async () => {
+    const h = await makeHarness({ config: { trustProxy: 1 } });
+    for (let i = 0; i < 5; i++) expect((await loginFrom(h, '1.1.1.1')).statusCode).toBe(401);
+    expect((await loginFrom(h, '1.1.1.1', GOOD)).statusCode).toBe(429);
+    expect((await loginFrom(h, '2.2.2.2', GOOD)).statusCode).toBe(200);
+  });
+
+  it('with trustProxy 0, X-Forwarded-For is ignored (one shared bucket, no spoofing)', async () => {
+    const h = await makeHarness({ config: { trustProxy: 0 } });
+    for (let i = 0; i < 5; i++) expect((await loginFrom(h, `9.9.9.${i}`)).statusCode).toBe(401);
+    expect((await loginFrom(h, '2.2.2.2', GOOD)).statusCode).toBe(429);
+  });
+
+  it('FailureThrottle stays bounded and evicts the oldest key', () => {
+    const t = new FailureThrottle(5, 60_000, new FakeClock(), 100);
+    for (let i = 0; i < 1000; i++) t.recordFailure(`ip-${i}`);
+    expect(t.size).toBeLessThanOrEqual(100);
+    expect(t.isBlocked('ip-999')).toBe(false);
+  });
+
+  it('GlobalFailureCeiling slows (never permanently locks) after the ceiling', () => {
+    const clock = new FakeClock();
+    const g = new GlobalFailureCeiling(3, 60_000, 10_000, clock);
+    for (let i = 0; i < 3; i++) {
+      expect(g.admit()).toBe(true);
+      g.recordFailure();
+    }
+    expect(g.admit()).toBe(true); // first attempt over the ceiling is admitted ...
+    expect(g.admit()).toBe(false); // ... then the rest are slowed
+    clock.advance(10_001);
+    expect(g.admit()).toBe(true);
+    clock.advance(60_001); // failures age out: fully open again
+    expect(g.admit()).toBe(true);
+    expect(g.admit()).toBe(true);
+  });
+
+  it('a distributed guessing run is slowed account-wide but the real user still gets in', async () => {
+    const h = await makeHarness({ config: { trustProxy: 1 } });
+    let slowed = 0;
+    for (let i = 0; i < 40; i++) {
+      const r = await loginFrom(h, `10.0.${i}.1`);
+      if (r.statusCode === 429) slowed += 1;
+    }
+    expect(slowed).toBeGreaterThan(0);
+    expect((await loginFrom(h, '77.7.7.7', GOOD)).statusCode).toBe(429); // slowed right now
+    h.clock.advance(10_001);
+    expect((await loginFrom(h, '77.7.7.7', GOOD)).statusCode).toBe(200); // not permanently locked
+  });
+});
+
+describe('proxy and TLS configuration (I2)', () => {
+  const base = { PILOT_USERNAME: 'pilot', PILOT_PASSWORD: 'pilot-password-123', SESSION_SECRET: 'x'.repeat(40) };
+
+  it('parses TRUST_PROXY_HOPS (default 0) and rejects the legacy boolean', () => {
+    expect(loadServerConfig({ ...base }).trustProxy).toBe(0);
+    expect(loadServerConfig({ ...base, TRUST_PROXY_HOPS: '1' }).trustProxy).toBe(1);
+    expect(loadServerConfig({ ...base, TRUST_PROXY: 'false' }).trustProxy).toBe(0);
+    expect(() => loadServerConfig({ ...base, TRUST_PROXY: 'true' })).toThrow(ConfigError);
+    expect(() => loadServerConfig({ ...base, TRUST_PROXY_HOPS: 'yes' })).toThrow(ConfigError);
+    expect(() => loadServerConfig({ ...base, TRUST_PROXY_HOPS: '-1' })).toThrow(ConfigError);
+  });
+
+  it('plain HTTP is only allowed with ALLOW_PLAIN_HTTP_BEHIND_PROXY=true, independent of proxy trust', () => {
+    expect(loadServerConfig({ ...base }).allowPlainHttp).toBe(false);
+    expect(loadServerConfig({ ...base, ALLOW_PLAIN_HTTP_BEHIND_PROXY: 'true' }).allowPlainHttp).toBe(true);
+    // trusting a proxy hop does not by itself switch TLS off
+    expect(() => readTls({}, loadServerConfig({ ...base, TRUST_PROXY_HOPS: '1' }).allowPlainHttp)).toThrow(/TLS_CERT_FILE/);
+    expect(readTls({}, true)).toBeUndefined();
+    expect(() => readTls({ TLS_CERT_FILE: '/nope.crt', TLS_KEY_FILE: '/nope.key' }, true)).toThrow(/cannot read TLS files/);
   });
 });

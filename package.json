@@ -13,6 +13,7 @@
     "web"
   ],
   "scripts": {
+    "pretest": "node scripts/fetch-nats-server.mjs",
     "test": "vitest run",
     "build": "tsc -b shared server worker && npm -w web run build",
     "start": "node scripts/start.mjs",
@@ -21,8 +22,15 @@
     "nats:fetch": "node scripts/fetch-nats-server.mjs",
     "certs:dev": "node scripts/gen-dev-cert.mjs",
     "test:e2e": "playwright test",
+    "pretest:e2e": "node scripts/fetch-nats-server.mjs",
+    "test:e2e:live": "node scripts/e2e-live.mjs",
     "drill:recovery": "node scripts/recovery-drill.mjs",
-    "share:tunnel": "node scripts/share-tunnel.mjs"
+    "share:tunnel": "node scripts/share-tunnel.mjs",
+    "stack:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d --build",
+    "stack:up:dev": "docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up -d --build",
+    "stack:nats": "docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up -d nats",
+    "stack:down": "docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.dev.yml down",
+    "scan:secrets": "node scripts/scan-secrets.mjs"
   },
   "devDependencies": {
     "@nats-io/jetstream": "3.5.0",

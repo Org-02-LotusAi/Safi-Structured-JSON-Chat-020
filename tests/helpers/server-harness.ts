@@ -29,7 +29,8 @@ export const testConfig = (over: Partial<ServerConfig> = {}): ServerConfig => ({
   bodyLimitBytes: 16384,
   model: 'test-model',
   natsTimeoutMs: 200,
-  trustProxy: false,
+  trustProxy: 0,
+  allowPlainHttp: false,
   ...over,
 });
 

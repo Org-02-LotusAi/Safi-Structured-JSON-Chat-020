@@ -1,7 +1,12 @@
 {
   "product": "SAFI Chat 020",
   "sow": "docs/SOW-020.md",
-  "status_vocabulary": ["PASS", "FAIL", "BLOCKED", "PENDING_HUMAN"],
+  "status_vocabulary": [
+    "PASS",
+    "FAIL",
+    "BLOCKED",
+    "PENDING_HUMAN"
+  ],
   "rules": "PASS only where committed automated evidence proves it. SAFI alone issues formal acceptance. Missing evidence is not PASS.",
   "build_machine_limits": {
     "openai": "No OPENAI_API_KEY and no gpt-6-luna access on the build machine; every real-OpenAI check is BLOCKED, not simulated.",
@@ -48,7 +53,8 @@
         "tests/worker.handler.test.ts (strict json_schema request, Ajv result check, fake upstream)",
         "tests/e2e/chat.spec.ts",
         "evidence/e2e/01-three-turn-summary.png",
-        "evidence/ui/04-summary-ok.png"
+        "evidence/ui/04-summary-ok.png",
+        "tests/e2e/live.spec.ts (npm run test:e2e:live: live UI run, writes evidence/live/<timestamp>/*.png) - not yet run: BLOCKED until a real key and URL exist"
       ]
     },
     "A05": {
@@ -59,7 +65,8 @@
         "tests/e2e/chat.spec.ts (schema switch, no code edits)",
         "evidence/e2e/02-tasks.png",
         "evidence/ui/05-tasks-ok.png",
-        "tests/schemas.test.ts"
+        "tests/schemas.test.ts",
+        "tests/e2e/live.spec.ts (npm run test:e2e:live) - not yet run: BLOCKED until a real key and URL exist"
       ]
     },
     "A06": {
@@ -113,10 +120,10 @@
       "title": "Worker unavailable: clear timeout, no false success; after restart a new request succeeds",
       "status": "PASS",
       "evidence": [
-        "tests/e2e/chat.spec.ts ('worker stopped gives an offline error; restart recovers', real worker process kill/start)",
+        "tests/e2e/chat.spec.ts ('worker stopped gives an offline error; restart recovers', real worker process kill/start; no upstream call while down)",
         "evidence/e2e/05-worker-offline.png",
         "evidence/e2e/06-worker-recovered.png",
-        "evidence/recovery/drill-2026-11-21T12-31-49-342Z.json (docker compose stack: worker stop -> 504 worker_unavailable; start -> 200)",
+        "evidence/recovery/DRILL_REPORT (docker compose stack: worker stop -> 504 worker_unavailable (NATS no responders); start -> 200)",
         "evidence/recovery/drill-console.txt",
         "tests/server.integration.test.ts"
       ],
@@ -127,21 +134,25 @@
       "status": "PASS",
       "evidence": [
         "tests/worker.handler.test.ts (sequential and concurrent duplicate message_id -> one upstream call)",
-        "tests/server.chat.test.ts ('idempotency and ambiguity (A11/A12)': cached duplicate, duplicate_in_flight, upstream_ambiguous)"
+        "tests/server.chat.test.ts ('idempotency and ambiguity (A11/A12)': cached duplicate, duplicate_in_flight; timeout after delivery -> 504 upstream_ambiguous, retryable false, receipt error_code upstream_ambiguous, never re-sent, same request_id replays as 409; no responders -> 504 worker_unavailable and a same-id retry is safe; unexpected throw after dispatch -> 502 and marked ambiguous, never stuck in flight)",
+        "tests/server.integration.test.ts ('a worker that receives a request and never replies gives upstream_ambiguous, not worker_unavailable': real NATS subscriber that never replies, request delivered once, never re-sent, JetStream receipt error_code upstream_ambiguous)"
       ],
-      "caveat": "Upstream call counts were measured against a fake upstream; verify:live repeats the duplicate check against the live API."
+      "caveat": "Upstream call counts were measured against a fake upstream; verify:live repeats the duplicate check against the live API. A real post-crash completion (worker killed mid-OpenAI-call) was simulated with a silent NATS subscriber, not a real crashing worker."
     },
     "A13": {
       "title": "JetStream durable redacted receipts replay after restart; no secret in Git, browser JS, logs or NATS audit",
       "status": "PASS",
       "evidence": [
-        "evidence/recovery/drill-2026-11-21T12-31-49-342Z.json (receipt count preserved across docker compose nats restart; new receipts after recovery)",
-        "tests/server.integration.test.ts (receipts in real JetStream)",
-        "tests/server.chat.test.ts ('publishes a redacted audit receipt before responding')",
+        "evidence/recovery/DRILL_REPORT (receipt count preserved across docker compose nats restart; new receipts after recovery)",
+        "tests/server.integration.test.ts (receipts in real JetStream; receipts contain no prompt/reply text)",
+        "tests/server.chat.test.ts ('publishes a redacted audit receipt before responding'; M6 worker error messages redacted before reaching the browser)",
+        "tests/server.logs.test.ts (server logs captured at debug level across wrong/right login, ok chat, worker error carrying a key, NATS timeout, no-responders, invalid reply, ingress rejection: no password, session cookie, CSRF token, prompt text, reply text or API key appears)",
+        "tests/worker.handler.test.ts ('logs ids and outcome but never prompt text...' and 'logs nothing sensitive when the upstream fails ...': worker logs captured, no key/prompt/history/reply)",
         "tests/schemas.test.ts (secret redaction)",
+        "evidence/security/SCAN_REPORT (npm run scan:secrets: tracked files, web/dist and evidence/ scanned for key/token patterns and the literal .env secrets; 0 hits)",
         "evidence/live-selftest/report.json (receipt redaction check, SELFTEST_ONLY)"
       ],
-      "note": "At commit time git grep for sk- style keys and a scan of web/dist found none. Logs: pino redaction configured; prompt/reply text is never logged."
+      "note": "Log-secret claims rest on the automated log-capture tests above (server and worker) and the committed secret-scan, not on inspection. Real-OpenAI logs have not been observed (no key on the build machine); the worker never logs prompt or reply text by construction and by test."
     },
     "A14": {
       "title": "Rate/call caps enforced; independent tester completes 30+ minutes; SHA, URL, screenshots, tests, handoff recorded",
@@ -154,9 +165,40 @@
     }
   },
   "summary": {
-    "PASS": ["A06", "A07", "A08", "A09", "A10", "A11", "A12", "A13"],
-    "BLOCKED": ["A02", "A03", "A04", "A05"],
-    "PENDING_HUMAN": ["A01", "A14"],
+    "PASS": [
+      "A06",
+      "A07",
+      "A08",
+      "A09",
+      "A10",
+      "A11",
+      "A12",
+      "A13"
+    ],
+    "BLOCKED": [
+      "A02",
+      "A03",
+      "A04",
+      "A05"
+    ],
+    "PENDING_HUMAN": [
+      "A01",
+      "A14"
+    ],
     "FAIL": []
+  },
+  "sow_section_11": {
+    "onboarding_rehearsal": {
+      "status": "PENDING_HUMAN",
+      "reason": "A person who has never seen the project must reach a working chat in 30 minutes or less from the README alone, with no developer help. Form: DOGFOOD.md 'Newcomer onboarding rehearsal'. The README sequence itself was executed by the developer (Path A and Path B) but that is not the rehearsal."
+    },
+    "recovery_on_live_deployment": {
+      "status": "BLOCKED",
+      "reason": "The committed drill evidence used a fake upstream. It must be re-run with npm run drill:recovery against the real-OpenAI deployment (needs a real OPENAI_API_KEY and deployment). Record in DOGFOOD.md 'Recovery drill on the real-OpenAI deployment'."
+    },
+    "dogfood_session": {
+      "status": "PENDING_HUMAN",
+      "reason": "Independent tester, 30+ minutes on the real HTTPS URL; see DOGFOOD.md (same as A01/A14)."
+    }
   }
 }

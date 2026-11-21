@@ -2,7 +2,7 @@ import type { ErrorCode } from '@safi/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ServerConfig } from './config.js';
 import type { Clock } from './deps.js';
-import { FailureThrottle } from './limits.js';
+import { FailureThrottle, GlobalFailureCeiling } from './limits.js';
 import { CSRF_HEADER, SESSION_COOKIE, safeEqual, type Session, type SessionStore } from './sessions.js';
 
 declare module 'fastify' {
@@ -13,6 +13,8 @@ declare module 'fastify' {
 
 const LOGIN_MAX_FAILURES = 5;
 const LOGIN_WINDOW_MS = 5 * 60_000;
+const LOGIN_GLOBAL_MAX_FAILURES = 30;
+const LOGIN_GLOBAL_SLOW_INTERVAL_MS = 10_000;
 
 /** Sends the standard `{outcome:"error", error}` body used by every failing /api route. */
 export function sendError(
@@ -68,6 +70,7 @@ export async function requireCsrf(req: FastifyRequest, reply: FastifyReply): Pro
 
 export function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext): void {
   const throttle = new FailureThrottle(LOGIN_MAX_FAILURES, LOGIN_WINDOW_MS, ctx.clock);
+  const globalCeiling = new GlobalFailureCeiling(LOGIN_GLOBAL_MAX_FAILURES, LOGIN_WINDOW_MS, LOGIN_GLOBAL_SLOW_INTERVAL_MS, ctx.clock);
   const auth = requireSession(ctx);
 
   app.post('/api/login', async (req, reply) => {
@@ -89,11 +92,15 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AuthContext): void
     if (throttle.isBlocked(ip)) {
       return sendError(reply, 429, 'user_rate_limited', 'Too many failed logins; try again later.', true);
     }
+    if (!globalCeiling.admit()) {
+      return sendError(reply, 429, 'user_rate_limited', 'Many failed logins across all clients; login is temporarily slowed. Try again in a few seconds.', true);
+    }
     // Evaluate both comparisons so timing does not reveal which field was wrong.
     const userOk = safeEqual(b.username, ctx.config.pilotUsername);
     const passOk = safeEqual(b.password, ctx.config.pilotPassword);
     if (!(userOk && passOk)) {
       throttle.recordFailure(ip);
+      globalCeiling.recordFailure();
       return sendError(reply, 401, 'unauthenticated', 'Invalid username or password.');
     }
     throttle.reset(ip);
