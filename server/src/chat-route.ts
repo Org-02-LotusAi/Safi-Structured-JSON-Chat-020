@@ -67,6 +67,15 @@ export function registerChatRoute(app: FastifyInstance, ctx: ChatContext): void 
     }
   }
 
+  /** Refund a call that was provably never delivered. A failed persist is logged; over-counting is the safe direction. */
+  async function refundUndelivered(): Promise<void> {
+    try {
+      await deps.usage.release();
+    } catch (e) {
+      app.log.error({ err: redactSecrets(e instanceof Error ? e.message : 'unknown') }, 'usage refund could not be persisted');
+    }
+  }
+
   function failure(
     requestId: string,
     code: ErrorCode,
@@ -193,6 +202,7 @@ export function registerChatRoute(app: FastifyInstance, ctx: ChatContext): void 
         if (e instanceof NoRespondersFailure) {
           // Nothing was delivered, so a same-id retry is safe: forget the request state.
           session.requests.delete(body.request_id);
+          await refundUndelivered();
           app.log.warn({ code: 'worker_unavailable', request_id: body.request_id }, 'no responders; request was not delivered');
           const f = failure(body.request_id, 'worker_unavailable', 'The AI worker is not running (no responders). Nothing was sent; try again shortly.', true, 'failed');
           return await finish(504, f.body, { outcome: 'error', error_code: 'worker_unavailable', model: null, openai_request_id: null, usage: null, in_reply_to: null }, false);
@@ -253,6 +263,7 @@ export function registerChatRoute(app: FastifyInstance, ctx: ChatContext): void 
         if (sent) setRequestState(session, body.request_id, { state: 'ambiguous' });
         else session.requests.delete(body.request_id);
       }
+      if (!sent) await refundUndelivered();
       const f = failure(
         body.request_id,
         'upstream_error',

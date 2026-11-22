@@ -108,6 +108,8 @@ export interface UsageStore {
   used(): number;
   /** Increments synchronously in memory, then persists. Rejects if the persist fails. */
   increment(): Promise<number>;
+  /** Refunds one call that was provably never delivered. Floors at 0; same persistence rules as increment(). */
+  release(): Promise<number>;
 }
 
 /** API-call counter persisted atomically (temp file + rename) to <dir>/usage.json. */
@@ -147,6 +149,15 @@ export class FileUsageStore implements UsageStore {
 
   increment(): Promise<number> {
     this.count += 1; // synchronous so the cap check and the increment cannot interleave
+    return this.persist();
+  }
+
+  release(): Promise<number> {
+    this.count = Math.max(0, this.count - 1); // synchronous, never below 0
+    return this.persist();
+  }
+
+  private persist(): Promise<number> {
     const snapshot = this.count;
     const write = this.writeChain.then(async () => {
       await fs.promises.mkdir(this.dir, { recursive: true });
@@ -167,6 +178,10 @@ export class MemoryUsageStore implements UsageStore {
   }
   async increment(): Promise<number> {
     this.count += 1;
+    return this.count;
+  }
+  async release(): Promise<number> {
+    this.count = Math.max(0, this.count - 1);
     return this.count;
   }
 }

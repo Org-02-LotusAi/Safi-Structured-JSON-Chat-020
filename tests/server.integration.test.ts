@@ -129,7 +129,7 @@ describe('server + real NATS + real worker + fake OpenAI', () => {
     expect(back.json().envelope.body.reply).toBe('Back');
 
     expect((await receipts()).map((r) => r.error_code)).toEqual([null, null, 'worker_unavailable', null]);
-    expect(JSON.parse(fs.readFileSync(path.join(dataDir, 'usage.json'), 'utf8'))).toEqual({ api_calls_used: 4 });
+    expect(JSON.parse(fs.readFileSync(path.join(dataDir, 'usage.json'), 'utf8'))).toEqual({ api_calls_used: 3 }); // the undelivered worker_unavailable call was refunded
   });
 
   it('a worker that receives a request and never replies gives upstream_ambiguous, not worker_unavailable (A12)', async () => {

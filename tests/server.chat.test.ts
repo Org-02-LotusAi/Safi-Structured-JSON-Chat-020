@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { OPENAI_SERVICE_GUID, PILOT_SENDER_GUID, type ErrorCode, type RequestEnvelope } from '../shared/src/index.js';
 import { NoRespondersFailure } from '../server/src/deps.js';
-import { FileUsageStore } from '../server/src/limits.js';
+import { FileUsageStore, MemoryUsageStore } from '../server/src/limits.js';
 import { TASKS_ID, chat, login, makeHarness } from './helpers/server-harness.js';
 
 const rejectedBodies: Array<[string, Record<string, unknown>]> = [
@@ -296,6 +296,7 @@ describe('idempotency and ambiguity (A11/A12)', () => {
         return 0;
       },
       increment: async () => 1,
+      release: async () => 0,
     };
     const h = await makeHarness({ usage });
     const l = await login(h.app);
@@ -411,6 +412,63 @@ describe('limits', () => {
       const again = await chat(h2.app, l2);
       expect(again.statusCode).toBe(429);
       expect(h2.nats.requests).toHaveLength(0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('no responders refunds the call (used() back to its pre-request value, persisted); delivered-then-timeout still counts', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'safi-usage-'));
+    try {
+      const h = await makeHarness({ usage: new FileUsageStore(dir) });
+      const l = await login(h.app);
+      expect((await chat(h.app, l)).statusCode).toBe(200);
+      const before = h.usage.used();
+      h.nats.failWith = new NoRespondersFailure();
+      const res = await chat(h.app, l);
+      expect(res.json().error.code).toBe('worker_unavailable');
+      expect(h.usage.used()).toBe(before);
+      expect(JSON.parse(fs.readFileSync(path.join(dir, 'usage.json'), 'utf8'))).toEqual({ api_calls_used: before });
+      h.nats.failWith = new Error('TIMEOUT');
+      const amb = await chat(h.app, l);
+      expect(amb.json().error.code).toBe('upstream_ambiguous');
+      expect(h.usage.used()).toBe(before + 1);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a failed refund persist is logged and the original worker_unavailable outcome is returned unchanged', async () => {
+    const usage = new MemoryUsageStore();
+    const realRelease = usage.release.bind(usage);
+    usage.release = async () => {
+      await realRelease(); // in-memory count drops first, then the persist fails
+      throw new Error('disk full');
+    };
+    const h = await makeHarness({ usage });
+    h.nats.failWith = new NoRespondersFailure();
+    const l = await login(h.app);
+    const res = await chat(h.app, l);
+    expect(res.statusCode).toBe(504);
+    expect(res.json().error.code).toBe('worker_unavailable');
+    expect(h.usage.used()).toBe(0);
+  });
+
+  it('FileUsageStore.release decrements, persists, floors at 0 and survives reload', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'safi-usage-'));
+    try {
+      const store = new FileUsageStore(dir);
+      await store.increment();
+      await store.increment();
+      expect(await store.release()).toBe(1);
+      expect(store.used()).toBe(1);
+      expect(new FileUsageStore(dir).used()).toBe(1);
+      expect(await store.release()).toBe(0);
+      expect(await store.release()).toBe(0); // floors at 0
+      expect(store.used()).toBe(0);
+      expect(JSON.parse(fs.readFileSync(path.join(dir, 'usage.json'), 'utf8'))).toEqual({ api_calls_used: 0 });
+      expect(new FileUsageStore(dir).used()).toBe(0);
+      expect(fs.readdirSync(dir)).toEqual(['usage.json']);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

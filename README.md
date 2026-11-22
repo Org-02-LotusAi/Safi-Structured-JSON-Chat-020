@@ -83,7 +83,7 @@ Edit `.env` and set at least:
 | `OPENAI_TIMEOUT_MS` | per-call timeout | 25000 |
 | `MAX_OUTPUT_TOKENS` | model output cap | 512 (max 512) |
 | `USER_RATE_PER_MIN` | requests per minute per user | 10 (max 10) |
-| `PILOT_API_CALL_CAP` | total OpenAI calls the pilot may use; persisted in `DATA_DIR/usage.json` | 40 |
+| `PILOT_API_CALL_CAP` | total OpenAI calls the pilot may use; persisted in `DATA_DIR/usage.json`; calls that were never delivered to the worker are refunded | 40 |
 | `MAX_INPUT_CHARS`, `MAX_TURNS`, `BODY_LIMIT_BYTES` | input caps | 4000, 8, 16384 |
 | `NATS_URL` | where server and worker find NATS | `nats://127.0.0.1:4222` |
 | `NATS_USER`, `NATS_PASS` | NATS authentication (enabled in compose when `NATS_USER` is set). Set `NATS_PASS` to a random value; with the dev override NATS listens on loopback and any local process could otherwise publish requests and bypass the server's caps | `safi` / placeholder |
@@ -235,7 +235,7 @@ the URL can reach the login page, so keep the pilot password private.
 * **Recovery drill** (`npm run drill:recovery`): automates the three actions above against compose and checks the results.
   It briefly publishes NATS on `127.0.0.1:4222` via `infra/docker-compose.dev.yml` to count receipts. Output goes to
   `evidence/recovery/`.
-* **Pilot call cap**: reset by deleting `DATA_DIR/usage.json` (compose: the `server-data` volume) while the server is stopped.
+* **Pilot call cap**: calls that were never delivered to the worker (`worker_unavailable`, or an internal error before the NATS request was sent) are refunded; delivered calls, including ambiguous timeouts, always count. Reset by deleting `DATA_DIR/usage.json` (compose: the `server-data` volume) while the server is stopped.
 * **Secrets**: `.env` is gitignored. The OpenAI key is only given to the worker; the compose file blanks it for the server.
 
 ## Troubleshooting by error code
