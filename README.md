@@ -236,6 +236,7 @@ the URL can reach the login page, so keep the pilot password private.
   It briefly publishes NATS on `127.0.0.1:4222` via `infra/docker-compose.dev.yml` to count receipts. Output goes to
   `evidence/recovery/`.
 * **Pilot call cap**: calls that were never delivered to the worker (`worker_unavailable`, or an internal error before the NATS request was sent) are refunded; delivered calls, including ambiguous timeouts, always count. Reset by deleting `DATA_DIR/usage.json` (compose: the `server-data` volume) while the server is stopped.
+* **Image pins**: the `Dockerfile` (`node`) and `infra/docker-compose.yml` (`nats`, `caddy`) pin images as `<exact-version>-alpine@sha256:<multi-arch index digest>`. To bump: `docker pull <image>:<new-tag>`, read the version, copy the `Digest:` line of `docker buildx imagetools inspect <image>:<new-tag>`, update the tag and digest together, then rebuild.
 * **Secrets**: `.env` is gitignored. The OpenAI key is only given to the worker; the compose file blanks it for the server.
 
 ## Troubleshooting by error code

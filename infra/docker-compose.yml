@@ -7,7 +7,7 @@
 name: safi-chat-020
 services:
   nats:
-    image: nats:2.11.17-alpine
+    image: nats:2.11.17-alpine@sha256:e4bf19f15fd3218814a4e3c9e0064e1334bd8aa20d5984b9f1a0afd084f8cc00
     # Only NATS_USER / NATS_PASS reach this container (not the rest of .env). If NATS_USER is set,
     # authentication is enabled; the worker and server pick the same values up from .env.
     entrypoint: ["/bin/sh", "-c"]
@@ -76,7 +76,7 @@ services:
   # Optional public TLS front door:  docker compose --profile public up -d
   # Needs SAFI_DOMAIN in .env and DNS pointing at this host; Caddy obtains a real certificate.
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
     profiles: [public]
     environment:
       SAFI_DOMAIN: ${SAFI_DOMAIN:-}
