@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ChatScreen } from './components/ChatScreen';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { LoginScreen } from './components/LoginScreen';
 import { getSession } from './lib/api';
 import type { SessionInfo } from './lib/types';
+
+// The chat screen pulls in assistant-ui; load it only after login so the login page stays small.
+const ChatScreen = lazy(() => import('./components/ChatScreen').then((m) => ({ default: m.ChatScreen })));
 
 type State = { phase: 'loading' } | { phase: 'login'; notice?: string } | { phase: 'chat'; session: SessionInfo };
 
@@ -28,5 +30,15 @@ export function App() {
   if (state.phase === 'login') {
     return <LoginScreen notice={state.notice} onLoggedIn={(session) => setState({ phase: 'chat', session })} />;
   }
-  return <ChatScreen session={state.session} onSignedOut={signedOut} />;
+  return (
+    <Suspense
+      fallback={
+        <p role="status" className="p-6 text-sm text-muted">
+          Loading chat…
+        </p>
+      }
+    >
+      <ChatScreen session={state.session} onSignedOut={signedOut} />
+    </Suspense>
+  );
 }
