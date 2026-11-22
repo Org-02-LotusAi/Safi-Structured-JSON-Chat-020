@@ -297,4 +297,5 @@ History / Logical Time / Final certification (JetStream receipts and Ajv PASS ar
 persistent transcript ownership (thread history in the browser is lost on reload; the server keeps the last eight turns
 per conversation in memory and loses them on restart), streaming, tools or function calls, a public NATS port, and
 SAFI-managed hosting. Sessions, the rate limiter and the idempotency cache are in memory; the API-call cap is persisted.
+**Restarts.** Sessions and conversation context are in memory by design (SOW-020: no cross-session history; canonical durable Chat History is out of scope). A server restart signs the user out and clears conversation context. The API-call counter (`data/usage.json`) and the JetStream audit receipts survive restarts.
 Also excluded: the full Z Kernel, local Logical Time, Draft/Final certification, a generalized schema compiler, file uploads, speech, Root context navigation, the Meeting Manager/Moderator, and enterprise production hardening or SAFI-owned hosting. No claims beyond the pilot. Only SAFI issues formal acceptance.
