@@ -34,7 +34,8 @@
         "tests/server.chat.test.ts (history bounded and per conversation)",
         "scripts/verify-live.mjs",
         "evidence/live/BLOCKED-2026-11-21.txt (script refuses a fake upstream)"
-      ]
+      ],
+      "live_claude_run": "Only a 2-turn live run on Claude so far; the three-turn npm run verify:live needs a publicly trusted HTTPS URL (tunnel or VM), not yet run."
     },
     "A03": {
       "title": "Real NATS request and reply captured with valid SAFI JSON, GUIDs, context, correlation",
@@ -44,7 +45,8 @@
         "tests/server.integration.test.ts (real nats-server, real JetStream)",
         "tests/worker.nats.test.ts",
         "evidence/live-selftest/report.json (SELFTEST_ONLY, fake upstream: A03 capture check PASS)"
-      ]
+      ],
+      "live_claude_run": "Live NATS round-trip to Claude happened in the e2e run, but the verify:live NATS capture has not been run (needs trusted HTTPS URL)."
     },
     "A04": {
       "title": "Summary schema: live strict Structured Output, Ajv-validated, UI shows ID/version/digest",
@@ -55,8 +57,10 @@
         "tests/e2e/chat.spec.ts",
         "evidence/e2e/01-three-turn-summary.png",
         "evidence/ui/04-summary-ok.png",
-        "tests/e2e/live.spec.ts (npm run test:e2e:live: live UI run, writes evidence/live/<timestamp>/*.png) - not yet run: BLOCKED until a real key and URL exist"
-      ]
+        "tests/e2e/live.spec.ts (npm run test:e2e:live: live UI run, writes evidence/live/<timestamp>/*.png) - not yet run: BLOCKED until a real key and URL exist",
+        "evidence/live/2026-11-23T14-35-12-697Z/02-summary.png"
+      ],
+      "live_claude_run": "Live run 2026-11-23 on Claude (claude-sonnet-5-5, LLM_PROVIDER=anthropic) via npm run test:e2e:live against the local HTTPS stack: summary reply Ajv PASS, UI shows schema id/version/digest and req_ id. Not OpenAI, so it stays BLOCKED under the SOW until SAFI accepts the provider deviation."
     },
     "A05": {
       "title": "Tasks schema yields typed tasks with the same UI/backend",
@@ -67,8 +71,10 @@
         "evidence/e2e/02-tasks.png",
         "evidence/ui/05-tasks-ok.png",
         "tests/schemas.test.ts",
-        "tests/e2e/live.spec.ts (npm run test:e2e:live) - not yet run: BLOCKED until a real key and URL exist"
-      ]
+        "tests/e2e/live.spec.ts (npm run test:e2e:live) - not yet run: BLOCKED until a real key and URL exist",
+        "evidence/live/2026-11-23T14-35-12-697Z/03-tasks.png"
+      ],
+      "live_claude_run": "Live run 2026-11-23 on Claude: tasks reply with typed priorities, Ajv PASS, audit persisted. Same deviation caveat as A04."
     },
     "A06": {
       "title": "Invalid body / unknown envelope fields rejected before NATS and OpenAI; counter unchanged",
