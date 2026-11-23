@@ -2,16 +2,25 @@ import { CHAT_REQUEST_SUBJECT, WORKER_QUEUE_GROUP, loadRegistry, type Registry }
 import { connect, type NatsConnection } from '@nats-io/transport-node';
 import pino, { type Logger } from 'pino';
 import { createHandler, type Handler } from './handler.js';
-import { createOpenAIClient } from './openai-client.js';
+import { createAnthropicCaller, createAnthropicClient, type AnthropicLike } from './anthropic-client.js';
+import type { ModelCaller } from './model-caller.js';
+import { createOpenAICaller, createOpenAIClient } from './openai-client.js';
 
 export interface WorkerOptions {
   natsUrl: string;
   natsUser?: string;
   natsPass?: string;
-  openaiApiKey: string;
+  /** Defaults to "openai". */
+  provider?: 'openai' | 'anthropic';
+  openaiApiKey?: string;
   /** Optional OpenAI base URL override (tests use a fake server). */
   openaiBaseURL?: string;
-  openaiTimeoutMs: number;
+  openaiTimeoutMs?: number;
+  anthropicApiKey?: string;
+  anthropicBaseURL?: string;
+  anthropicTimeoutMs?: number;
+  /** Test seam: a fake Anthropic client (no network). */
+  anthropicClient?: AnthropicLike;
   model: string;
   maxOutputTokens: number;
   /** Defaults to loading and verifying <repo>/schemas; throws on any registry error. */
@@ -28,13 +37,26 @@ export interface RunningWorker {
 const encoder = new TextEncoder();
 
 export async function startWorker(opts: WorkerOptions): Promise<RunningWorker> {
-  if (!opts.openaiApiKey) throw new Error('openaiApiKey is required');
-  const logger = opts.logger ?? pino({ level: process.env.LOG_LEVEL ?? 'info', redact: ['*.api_key', 'OPENAI_API_KEY'] });
+  const provider = opts.provider ?? 'openai';
+  let caller: ModelCaller;
+  if (provider === 'anthropic') {
+    if (!opts.anthropicApiKey && !opts.anthropicClient) throw new Error('anthropicApiKey is required when provider=anthropic');
+    const client =
+      opts.anthropicClient ??
+      createAnthropicClient({ apiKey: opts.anthropicApiKey!, baseURL: opts.anthropicBaseURL, timeoutMs: opts.anthropicTimeoutMs ?? 25_000 });
+    caller = createAnthropicCaller(client, opts.model);
+  } else {
+    if (!opts.openaiApiKey) throw new Error('openaiApiKey is required when provider=openai');
+    caller = createOpenAICaller(
+      createOpenAIClient({ apiKey: opts.openaiApiKey, baseURL: opts.openaiBaseURL, timeoutMs: opts.openaiTimeoutMs ?? 25_000 }),
+      opts.model,
+    );
+  }
+  const logger = opts.logger ?? pino({ level: process.env.LOG_LEVEL ?? 'info', redact: ['*.api_key', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'] });
   const registry = opts.registry ?? loadRegistry();
   const handler = createHandler({
     registry,
-    openai: createOpenAIClient({ apiKey: opts.openaiApiKey, baseURL: opts.openaiBaseURL, timeoutMs: opts.openaiTimeoutMs }),
-    model: opts.model,
+    caller,
     maxOutputTokens: opts.maxOutputTokens,
     logger,
   });
@@ -78,7 +100,7 @@ export async function startWorker(opts: WorkerOptions): Promise<RunningWorker> {
     }
   })();
 
-  logger.info({ subject: CHAT_REQUEST_SUBJECT, queue: WORKER_QUEUE_GROUP, model: opts.model }, 'worker started');
+  logger.info({ subject: CHAT_REQUEST_SUBJECT, queue: WORKER_QUEUE_GROUP, model: opts.model, provider }, 'worker started');
 
   return {
     handler,

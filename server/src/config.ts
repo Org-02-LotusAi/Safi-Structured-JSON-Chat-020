@@ -1,4 +1,4 @@
-import { DEFAULT_OPENAI_MODEL, LIMIT_DEFAULTS, REQUEST_DEADLINE_MS } from '@safi/shared';
+import { DEFAULT_ANTHROPIC_MODEL, DEFAULT_OPENAI_MODEL, parseLlmProvider, type LlmProvider, LIMIT_DEFAULTS, REQUEST_DEADLINE_MS } from '@safi/shared';
 
 export interface ServerConfig {
   pilotUsername: string;
@@ -10,6 +10,8 @@ export interface ServerConfig {
   maxInputChars: number;
   maxTurns: number;
   bodyLimitBytes: number;
+  /** Active model provider (LLM_PROVIDER). */
+  provider: LlmProvider;
   model: string;
   /** NATS request deadline; injectable so tests do not wait 30 s. */
   natsTimeoutMs: number;
@@ -19,6 +21,8 @@ export interface ServerConfig {
   allowPlainHttp: boolean;
   /** Host of OPENAI_BASE_URL when set (informational; used by verify:live to refuse fake upstreams). */
   openaiBaseUrlHost?: string;
+  /** Host of ANTHROPIC_BASE_URL when set (same purpose). */
+  anthropicBaseUrlHost?: string;
 }
 
 export class ConfigError extends Error {
@@ -51,12 +55,12 @@ function trustProxyHops(env: Env): number {
   return n;
 }
 
-function baseUrlHost(raw: string | undefined): string | undefined {
+function baseUrlHost(raw: string | undefined, name: string): string | undefined {
   if (!raw) return undefined;
   try {
     return new URL(raw).host;
   } catch {
-    throw new ConfigError('OPENAI_BASE_URL must be a valid URL');
+    throw new ConfigError(`${name} must be a valid URL`);
   }
 }
 
@@ -68,6 +72,12 @@ export function loadServerConfig(env: Env = process.env): ServerConfig {
   if (!pilotUsername) throw new ConfigError('PILOT_USERNAME is required');
   if (pilotPassword.length < 12) throw new ConfigError('PILOT_PASSWORD is required and must be at least 12 characters');
   if (sessionSecret.length < 32) throw new ConfigError('SESSION_SECRET is required and must be at least 32 characters');
+  let provider: LlmProvider;
+  try {
+    provider = parseLlmProvider(env.LLM_PROVIDER);
+  } catch (e) {
+    throw new ConfigError((e as Error).message);
+  }
   return {
     pilotUsername,
     pilotPassword,
@@ -78,10 +88,12 @@ export function loadServerConfig(env: Env = process.env): ServerConfig {
     maxInputChars: intEnv(env, 'MAX_INPUT_CHARS', LIMIT_DEFAULTS.MAX_INPUT_CHARS, 4000),
     maxTurns: intEnv(env, 'MAX_TURNS', LIMIT_DEFAULTS.MAX_TURNS, 8),
     bodyLimitBytes: intEnv(env, 'BODY_LIMIT_BYTES', LIMIT_DEFAULTS.BODY_LIMIT_BYTES),
-    model: env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+    provider,
+    model: provider === 'anthropic' ? env.ANTHROPIC_MODEL || DEFAULT_ANTHROPIC_MODEL : env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
     natsTimeoutMs: REQUEST_DEADLINE_MS,
     trustProxy: trustProxyHops(env),
     allowPlainHttp: env.ALLOW_PLAIN_HTTP_BEHIND_PROXY === 'true',
-    openaiBaseUrlHost: baseUrlHost(env.OPENAI_BASE_URL),
+    openaiBaseUrlHost: baseUrlHost(env.OPENAI_BASE_URL, 'OPENAI_BASE_URL'),
+    anthropicBaseUrlHost: baseUrlHost(env.ANTHROPIC_BASE_URL, 'ANTHROPIC_BASE_URL'),
   };
 }

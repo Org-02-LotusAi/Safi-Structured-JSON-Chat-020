@@ -17,6 +17,7 @@ export const LOG_REDACT_PATHS = [
   'set-cookie',
   '*.api_key',
   'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
   'body',
   '*.text',
   'history',
@@ -87,14 +88,23 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       .map((e) => ({ id: e.id, version: e.version, sha256: e.sha256, label: e.label, schema: e.schema })),
   }));
 
+  const anthropicActive = config.provider === 'anthropic';
+  const realHost = anthropicActive ? 'api.anthropic.com' : 'api.openai.com';
+  const customHost = anthropicActive ? config.anthropicBaseUrlHost : config.openaiBaseUrlHost;
+  const upstreamHost = customHost ?? realHost;
+  const upstreamName = !customHost || customHost === realHost ? config.provider : 'custom';
+
   app.get('/api/status', { preHandler: [auth] }, async () => ({
     api_calls_used: deps.usage.used(),
     api_call_cap: config.apiCallCap,
     user_rate_per_min: config.userRatePerMin,
     model: config.model,
-    // "openai" unless OPENAI_BASE_URL points elsewhere. Reflects the server's own environment:
-    // deploy server and worker with the same .env (compose does) so this matches the worker.
-    upstream: !config.openaiBaseUrlHost || config.openaiBaseUrlHost === 'api.openai.com' ? 'openai' : 'custom',
+    provider: config.provider,
+    // The provider name ("openai" | "anthropic") unless its base URL points elsewhere ("custom").
+    // Reflects the server's own environment: deploy server and worker with the same .env (compose does)
+    // so this matches the worker.
+    upstream: upstreamName,
+    upstream_host: upstreamHost,
     openai_base_url_host: config.openaiBaseUrlHost ?? 'api.openai.com',
     nats: deps.natsStatus ? deps.natsStatus() : 'connected',
     worker: { ...worker },

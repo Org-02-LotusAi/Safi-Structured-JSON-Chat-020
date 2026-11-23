@@ -27,6 +27,7 @@ export const testConfig = (over: Partial<ServerConfig> = {}): ServerConfig => ({
   maxInputChars: 4000,
   maxTurns: 8,
   bodyLimitBytes: 16384,
+  provider: 'openai',
   model: 'test-model',
   natsTimeoutMs: 200,
   trustProxy: 0,

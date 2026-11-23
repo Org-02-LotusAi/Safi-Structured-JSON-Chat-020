@@ -114,7 +114,7 @@ function OkMessage({ p }: { p: SafiOk }) {
           <ShortHash hash={env.schema_sha256} />
         </MetaRow>
         <MetaRow label="Model">{env.model}</MetaRow>
-        <MetaRow label="OpenAI request ID">{env.openai_request_id ?? 'n/a'}</MetaRow>
+        <MetaRow label="Request ID">{env.openai_request_id ?? 'n/a'}</MetaRow>
         <MetaRow label="Audit">{auditBadge(p.audit)}</MetaRow>
       </dl>
     </Card>

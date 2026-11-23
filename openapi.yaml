@@ -209,7 +209,11 @@ components:
         api_calls_used: { type: integer }
         api_call_cap: { type: integer }
         user_rate_per_min: { type: integer }
-        model: { type: string }
+        provider: { enum: [openai, anthropic], description: Active model provider (LLM_PROVIDER) }
+        model: { type: string, description: Model of the active provider }
+        upstream: { enum: [openai, anthropic, custom], description: The provider name, or custom when its base URL is overridden }
+        upstream_host: { type: string, description: Host the active provider's calls go to (api.openai.com / api.anthropic.com unless overridden) }
+        openai_base_url_host: { type: string }
         nats: { enum: [connected, disconnected] }
         worker:
           type: object

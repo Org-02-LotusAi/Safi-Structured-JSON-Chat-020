@@ -23,6 +23,18 @@ export const LIMIT_DEFAULTS = {
 } as const;
 
 export const DEFAULT_OPENAI_MODEL = 'gpt-6-luna';
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5-5';
+export const ANTHROPIC_TIMEOUT_MS_DEFAULT = 25_000;
+
+export const LLM_PROVIDERS = ['openai', 'anthropic'] as const;
+export type LlmProvider = (typeof LLM_PROVIDERS)[number];
+
+/** Parses LLM_PROVIDER (default "openai"). Throws on any other value; never echoes secrets. */
+export function parseLlmProvider(raw: string | undefined): LlmProvider {
+  if (raw === undefined || raw === '') return 'openai';
+  if ((LLM_PROVIDERS as readonly string[]).includes(raw)) return raw as LlmProvider;
+  throw new Error(`LLM_PROVIDER must be one of: ${LLM_PROVIDERS.join(', ')}`);
+}
 
 export const ERROR_CODES = [
   'ingress_rejected',

@@ -8,6 +8,7 @@
     "PENDING_HUMAN"
   ],
   "rules": "PASS only where committed automated evidence proves it. SAFI alone issues formal acceptance. Missing evidence is not PASS.",
+  "provider_note": "A02-A05 may be exercised with LLM_PROVIDER=anthropic (Claude). That is a documented, operator-approved deviation from SOW OpenAI requirement that SAFI must accept; the OpenAI path remains available and unchanged. No check is marked PASS by this change.",
   "build_machine_limits": {
     "openai": "No OPENAI_API_KEY and no gpt-6-luna access on the build machine; every real-OpenAI check is BLOCKED, not simulated.",
     "https": "No owned domain/VM. npm run share:tunnel (Cloudflare quick tunnel) was verified to give a valid-TLS URL to a local stack; no permanent URL is recorded.",

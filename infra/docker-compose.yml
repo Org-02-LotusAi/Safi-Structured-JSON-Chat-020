@@ -36,6 +36,11 @@ services:
     # Reaching a fake/local OpenAI from here: OPENAI_BASE_URL=http://host.docker.internal:<port>/v1
     environment:
       NATS_URL: nats://nats:4222
+      # Model provider: openai (SOW default) or anthropic (operator-approved option). The keys come from .env via env_file.
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+      ANTHROPIC_TIMEOUT_MS: ${ANTHROPIC_TIMEOUT_MS:-25000}
       PILOT_USERNAME: ""
       PILOT_PASSWORD: ""
       SESSION_SECRET: ""
@@ -51,8 +56,9 @@ services:
       dockerfile: Dockerfile
     command: ["node", "server/dist/main.js"]
     env_file: ../.env
-    # env_file loads all of .env, so the server would otherwise see OPENAI_API_KEY.
-    # Only the worker calls OpenAI; blank the key here so it never reaches this container.
+    # env_file loads all of .env, so the server would otherwise see OPENAI_API_KEY / ANTHROPIC_API_KEY.
+    # Only the worker calls the model provider; blank the keys here so they never reach this container.
+    # The server only needs LLM_PROVIDER / model / base URL to report /api/status.
     # TLS paths point at the container mount (./certs on the host -> /app/certs).
     environment:
       NATS_URL: nats://nats:4222
@@ -60,6 +66,10 @@ services:
       TLS_CERT_FILE: /app/certs/dev.crt
       TLS_KEY_FILE: /app/certs/dev.key
       OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
     # Loopback only by default: the login throttle trusts X-Forwarded-For only for TRUST_PROXY_HOPS hops,
     # so the port must not be directly reachable by untrusted clients. For public exposure use the
     # caddy profile below (Caddy reaches this service on the internal network; set TRUST_PROXY_HOPS=1)

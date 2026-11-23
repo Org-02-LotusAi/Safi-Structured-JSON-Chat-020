@@ -1,5 +1,5 @@
 // Secret scan (A13). Scans git-tracked files, the built web bundle (web/dist) and evidence/ for
-// key/token patterns, plus the literal values of OPENAI_API_KEY / PILOT_PASSWORD / SESSION_SECRET /
+// key/token patterns, plus the literal values of OPENAI_API_KEY / ANTHROPIC_API_KEY / PILOT_PASSWORD / SESSION_SECRET /
 // NATS_PASS from .env (when present). Never prints or stores a matched value: only file paths, pattern
 // names and counts. Writes evidence/security/secret-scan-<timestamp>.json. Exit 1 on any hit.
 //   npm run scan:secrets
@@ -28,16 +28,17 @@ function readEnv() {
 // the same text anywhere else (src, docs, web bundle, evidence) is a hit.
 const FAKE_PREFIXES = ['sk-test-', 'sk-e2e-', 'sk-abcdefgh', 'sk-supersecret', 'sk-proj-abcdefgh'];
 const PATTERNS = [
+  { name: 'anthropic-key', re: /\bsk-ant-[A-Za-z0-9_-]{16,}/g, fakeOk: true },
   { name: 'openai-style-key', re: /\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{16,}/g, fakeOk: true },
   { name: 'bearer-token', re: /\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/g },
   { name: 'private-key-block', re: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/g },
   { name: 'aws-access-key', re: /\bAKIA[0-9A-Z]{16}\b/g },
   { name: 'signed-session-cookie', re: /safi_session=s%3A[A-Za-z0-9._%-]{20,}|safi_session=[A-Za-z0-9._-]{20,}\.[A-Za-z0-9+/_%-]{20,}/g },
-  { name: 'env-assignment-with-value', re: /^[ 	]*OPENAI_API_KEY[ 	]*=[ 	]*[^\s#]{8,}/gm },
+  { name: 'env-assignment-with-value', re: /^[ 	]*(?:OPENAI|ANTHROPIC)_API_KEY[ 	]*=[ 	]*[^\s#]{8,}/gm },
 ];
 
 const env = readEnv();
-const literals = ['OPENAI_API_KEY', 'PILOT_PASSWORD', 'SESSION_SECRET', 'NATS_PASS']
+const literals = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'PILOT_PASSWORD', 'SESSION_SECRET', 'NATS_PASS']
   .map((k) => ({ name: k, value: env[k] }))
   .filter((l) => l.value && l.value.length >= 8);
 

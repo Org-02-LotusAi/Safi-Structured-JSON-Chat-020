@@ -1,22 +1,14 @@
-import { DEFAULT_OPENAI_MODEL, LIMIT_DEFAULTS, RegistryError, loadRegistry } from '@safi/shared';
+import { LIMIT_DEFAULTS, RegistryError, loadRegistry } from '@safi/shared';
 import pino from 'pino';
+import { intEnv, loadProviderConfig } from './config.js';
 import { startWorker } from './service.js';
 
-function intEnv(name: string, dflt: number): number {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') return dflt;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n <= 0) throw new Error(`${name} must be a positive integer`);
-  return n;
-}
-
 async function main(): Promise<void> {
-  const logger = pino({ level: process.env.LOG_LEVEL ?? 'info', redact: ['*.api_key', 'OPENAI_API_KEY'] });
+  const logger = pino({ level: process.env.LOG_LEVEL ?? 'info', redact: ['*.api_key', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'] });
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('OPENAI_API_KEY is required (set it in the environment); refusing to start');
+  const providerConfig = loadProviderConfig(process.env);
 
-  const maxOutputTokens = intEnv('MAX_OUTPUT_TOKENS', LIMIT_DEFAULTS.MAX_OUTPUT_TOKENS);
+  const maxOutputTokens = intEnv(process.env, 'MAX_OUTPUT_TOKENS', LIMIT_DEFAULTS.MAX_OUTPUT_TOKENS);
   if (maxOutputTokens > 512) throw new Error('MAX_OUTPUT_TOKENS must be <= 512');
 
   let registry;
@@ -31,10 +23,7 @@ async function main(): Promise<void> {
     natsUrl: process.env.NATS_URL ?? 'nats://127.0.0.1:4222',
     natsUser: process.env.NATS_USER || undefined,
     natsPass: process.env.NATS_PASS || undefined,
-    openaiApiKey: apiKey,
-    openaiBaseURL: process.env.OPENAI_BASE_URL || undefined,
-    openaiTimeoutMs: intEnv('OPENAI_TIMEOUT_MS', LIMIT_DEFAULTS.OPENAI_TIMEOUT_MS),
-    model: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+    ...providerConfig,
     maxOutputTokens,
     registry,
     logger,

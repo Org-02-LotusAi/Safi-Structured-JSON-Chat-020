@@ -70,6 +70,7 @@ if (!user || !pass) blocked('PILOT_USERNAME and PILOT_PASSWORD are required.');
 secrets.push(pass);
 if (process.env.NATS_PASS) secrets.push(process.env.NATS_PASS);
 if (process.env.OPENAI_API_KEY) secrets.push(process.env.OPENAI_API_KEY);
+if (process.env.ANTHROPIC_API_KEY) secrets.push(process.env.ANTHROPIC_API_KEY);
 const allowSelfSigned = selftest && ['localhost', '127.0.0.1'].includes(base.hostname);
 
 function http(method, p, { body, headers = {}, rawBody } = {}) {
@@ -124,10 +125,12 @@ let auth = { cookie: session.cookie, 'x-safi-csrf': session.csrf };
 const statusRes = await http('GET', '/api/status', { headers: auth });
 if (statusRes.status !== 200) blocked(`/api/status returned ${statusRes.status}.`);
 const status0 = statusRes.json;
-if (status0.upstream !== 'openai' && !selftest) {
+// A live run must hit the real provider host (api.openai.com or api.anthropic.com), never a fake/custom base URL.
+const realUpstream = status0.upstream === 'openai' || status0.upstream === 'anthropic';
+if (!realUpstream && !selftest) {
   blocked(
-    `the stack reports upstream "${status0.upstream}" (OPENAI_BASE_URL host ${status0.openai_base_url_host}); A02-A05 require the worker to call the REAL OpenAI API with a real OPENAI_API_KEY. ` +
-      'This is expected on a machine without OpenAI access.',
+    `the stack reports upstream "${status0.upstream}" (host ${status0.upstream_host ?? status0.openai_base_url_host}); A02-A05 require the worker to call the REAL provider API (api.openai.com or api.anthropic.com) with a real key. ` +
+      'This is expected on a machine without provider access.',
   );
 }
 if (status0.nats !== 'connected') blocked(`server reports NATS ${status0.nats}.`);
@@ -195,7 +198,7 @@ const report = {
   git_sha: (() => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root }).toString().trim(); } catch { return null; } })(),
   git_dirty: (() => { try { return execFileSync('git', ['status', '--porcelain', '--', '.', ':!evidence'], { cwd: root }).toString().trim().length > 0; } catch { return null; } })(),
   versions: { node: process.version, npm: /npm\/([^ ]+)/.exec(process.env.npm_config_user_agent || '')?.[1] ?? null, nats_server: null },
-  status_before: { model: status0.model, upstream: status0.upstream, openai_base_url_host: status0.openai_base_url_host, api_calls_used: status0.api_calls_used, api_call_cap: status0.api_call_cap },
+  status_before: { provider: status0.provider ?? 'openai', model: status0.model, upstream: status0.upstream, upstream_host: status0.upstream_host, openai_base_url_host: status0.openai_base_url_host, api_calls_used: status0.api_calls_used, api_call_cap: status0.api_call_cap },
   openai_request_ids: [],
   stream: null,
   nats_capture_note: natsNote,
@@ -234,7 +237,7 @@ for (const i of ids) if (i) report.openai_request_ids.push(i);
 check('A02', 'three real turns succeed with OpenAI request ids', a02ok && ids.every((i) => typeof i === 'string' && i.startsWith('req_')), `ids=${ids.join(',')}`);
 const lastReply = String(turnResults[2].json?.envelope?.body?.reply ?? '').toLowerCase();
 check('A02', 'turn 3 uses prior authorized context (mentions teal)', lastReply.includes('teal'), `reply length ${lastReply.length}`);
-if (status0.upstream === 'openai') {
+if (realUpstream) {
   const modelOk = turnResults.every((r) => String(r.json?.envelope?.model ?? '').startsWith(status0.model));
   check('A02', 'reply model matches configured model (not a fake upstream)', modelOk, `model=${turnResults[0].json?.envelope?.model}`);
 }

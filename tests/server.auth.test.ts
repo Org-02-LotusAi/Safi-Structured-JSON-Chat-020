@@ -219,3 +219,19 @@ describe('proxy and TLS configuration (I2)', () => {
     expect(() => readTls({ TLS_CERT_FILE: '/nope.crt', TLS_KEY_FILE: '/nope.key' }, true)).toThrow(/cannot read TLS files/);
   });
 });
+
+describe('status reports the active provider', () => {
+  it('anthropic: provider, real upstream and host', async () => {
+    const h = await makeHarness({ config: { provider: 'anthropic', model: 'claude-sonnet-5-5' } });
+    const l = await login(h.app);
+    const res = await h.app.inject({ method: 'GET', url: '/api/status', headers: { cookie: l.cookie } });
+    expect(res.json()).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-5-5', upstream: 'anthropic', upstream_host: 'api.anthropic.com' });
+  });
+
+  it('anthropic with a custom base URL is custom', async () => {
+    const h = await makeHarness({ config: { provider: 'anthropic', anthropicBaseUrlHost: '127.0.0.1:9' } });
+    const l = await login(h.app);
+    const res = await h.app.inject({ method: 'GET', url: '/api/status', headers: { cookie: l.cookie } });
+    expect(res.json()).toMatchObject({ upstream: 'custom', upstream_host: '127.0.0.1:9' });
+  });
+});

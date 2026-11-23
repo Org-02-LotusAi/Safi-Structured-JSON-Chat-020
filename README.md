@@ -49,8 +49,23 @@ and the requirements in `docs/SOW-020.md`.
 | An OpenAI API key with access to `gpt-6-luna` and a spend cap | real answers | platform.openai.com |
 | A pilot username and password you choose | login | — |
 
-Without an OpenAI key you can still run the whole automated test-suite and the browser end-to-end test: they use a fake
+Claude (Anthropic) can be used instead of OpenAI: see "Choosing a model provider" below.
+
+Without a provider key you can still run the whole automated test-suite and the browser end-to-end test: they use a fake
 upstream that is part of the tests only. A real conversation and `npm run verify:live` need the real key.
+
+### Choosing a model provider
+
+| Provider | Status | Set in `.env` |
+|---|---|---|
+| OpenAI | SOW default and the SOW-compliant option (Responses API, `gpt-6-luna`) | `LLM_PROVIDER=openai` (or unset) and `OPENAI_API_KEY` |
+| Claude (Anthropic) | operator option; a documented deviation from SOW §OpenAI that SAFI must accept | `LLM_PROVIDER=anthropic`, `ANTHROPIC_API_KEY` and optionally `ANTHROPIC_MODEL` (default `claude-sonnet-5-5`) |
+
+The OpenAI path is unchanged. Both providers sit behind one worker interface, so the envelopes, Ajv validation,
+idempotency and audit are identical. The envelope and receipt field `openai_request_id` is part of the frozen schemas and
+carries the active provider's request id; the UI calls it "Request ID". `/api/status` reports `provider`, `model` and
+the upstream host, and `npm run verify:live` accepts a run only against `api.openai.com` or `api.anthropic.com`.
+The worker refuses to start on an unknown `LLM_PROVIDER` or when the chosen provider's key is missing.
 
 ### 1. Install and test (5 min)
 
@@ -77,7 +92,9 @@ Edit `.env` and set at least:
 | `PILOT_USERNAME`, `PILOT_PASSWORD` | the single login (password at least 12 characters) | required |
 | `SESSION_SECRET` | signs session cookies, at least 32 random characters | required |
 | `SESSION_TTL_MIN` | session lifetime | 120 |
-| `OPENAI_API_KEY` | worker only; never sent to the server container or browser | required for real answers |
+| `LLM_PROVIDER` | `openai` (SOW default) or `anthropic`; anything else refuses to start. See "Choosing a model provider" | `openai` |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_TIMEOUT_MS` | worker only (key never reaches the server container); used when `LLM_PROVIDER=anthropic`. Empty base URL = real API | key required for anthropic; `claude-sonnet-5-5`; empty; 25000 |
+| `OPENAI_API_KEY` | required only when `LLM_PROVIDER=openai`; worker only; never sent to the server container or browser | required for real answers |
 | `OPENAI_MODEL` | model name | `gpt-6-luna` |
 | `OPENAI_BASE_URL` | leave empty for real OpenAI; anything else marks the stack "custom" | empty |
 | `OPENAI_TIMEOUT_MS` | per-call timeout | 25000 |
