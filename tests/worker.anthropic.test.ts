@@ -81,6 +81,7 @@ describe('worker handler with the Anthropic provider (fake client, no network)',
     expect(sent.model).toBe('claude-sonnet-5-5');
     expect(sent.max_tokens).toBe(512);
     expect(sent.system).toContain('guest chat service');
+    expect(sent.system).toContain('at most 6 items');
     expect(sent.messages).toEqual([
       { role: 'user', content: 'earlier question' },
       { role: 'assistant', content: 'earlier answer' },
